@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Browser Bridge Test</title>
+<style>
+body{font:16px system-ui;background:#eef2f7;color:#16213a;margin:0;padding:32px}main{max-width:900px;margin:auto}h1{font-size:30px}.row{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:18px 0}input,select,button,textarea{padding:12px;border-radius:8px;border:1px solid #97a7c1;font:inherit}button{background:#3867e8;color:white;cursor:pointer}.box{padding:24px;border-radius:12px;border:2px dashed #8191ad;min-width:140px;background:white}#source{background:#ffdda0;cursor:grab}#pointer-area{height:150px;width:420px;position:relative;background:#d8e4f9;border-radius:12px}#pointer{position:absolute;left:20px;top:30px;width:70px;height:70px;background:#7457d7;color:white;border-radius:10px;display:grid;place-items:center;touch-action:none;cursor:grab}.spacer{height:1100px}output{display:block;background:white;padding:12px;border-radius:8px}
+</style></head><body><main><h1>Browser Bridge Test</h1>
+<div class="row"><label>Имя <input id="name" aria-label="Имя"></label><button id="submit">Отправить</button><output id="result">Ожидание</output></div>
+<div class="row"><label><input id="check" type="checkbox"> Согласен</label><select id="choice" aria-label="Выбор"><option value="one">Первый</option><option value="two">Второй</option></select><input id="file" type="file" aria-label="Файл"></div>
+<div class="row"><div id="source" class="box" draggable="true">Перетащить HTML5</div><div id="drop" class="box">Сюда</div></div>
+<div class="row"><div id="pointer-area"><div id="pointer">Pointer</div></div><output id="pointer-result">Не перемещён</output></div>
+<div class="row"><div id="shadow-host"></div><button id="dialog">Диалог</button><a href="/download" download="sample.txt">Скачать файл</a></div>
+<textarea id="notes" aria-label="Заметки"></textarea><p id="trusted">Trusted: none</p>
+<div class="spacer"></div><p id="bottom">Конец страницы</p></main>
+<script>
+window.fixture = { clicks:0, trusted:false, drop:false, pointer:false, dialog:null };
+document.querySelector('#submit').onclick = e => { fixture.clicks++; fixture.trusted=e.isTrusted; document.querySelector('#result').textContent=document.querySelector('#name').value; document.querySelector('#trusted').textContent='Trusted: '+e.isTrusted; console.log('fixture submit',fixture.clicks); fetch('/ping'); };
+document.querySelector('#source').ondragstart=e=>e.dataTransfer.setData('text/plain','bridge');
+document.querySelector('#drop').ondragover=e=>e.preventDefault();
+document.querySelector('#drop').ondrop=e=>{e.preventDefault();fixture.drop=e.dataTransfer.getData('text/plain')==='bridge';e.currentTarget.textContent='Dropped: '+fixture.drop;};
+const pointer=document.querySelector('#pointer');let start;
+pointer.onpointerdown=e=>{start={x:e.clientX,y:e.clientY,left:pointer.offsetLeft,top:pointer.offsetTop};pointer.setPointerCapture(e.pointerId);};
+pointer.onpointermove=e=>{if(start){pointer.style.left=start.left+e.clientX-start.x+'px';pointer.style.top=start.top+e.clientY-start.y+'px';}};
+pointer.onpointerup=e=>{fixture.pointer=!!start&&Math.abs(e.clientX-start.x)>20;start=null;document.querySelector('#pointer-result').textContent='Moved: '+fixture.pointer;};
+document.querySelector('#shadow-host').attachShadow({mode:'open'}).innerHTML='<label>Shadow <input aria-label="Shadow" id="shadow-input"></label>';
+document.querySelector('#dialog').onclick=()=>setTimeout(()=>{fixture.dialog=confirm('Browser Bridge confirmation');},0);
+</script></body></html>
