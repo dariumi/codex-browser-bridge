@@ -50,6 +50,13 @@ test('modal dialog commands bypass a blocked action', async () => {
   assert.equal(await automation.run('dialog', {}), 'dialog handled');
   assert.equal(await evaluated, 'unblocked');
 });
+test('dialog handling never waits on blocked tab-group UI', async () => {
+  const { automation } = mock();
+  automation.attached.add(2);
+  automation.workspace = { mark: async () => { throw new Error('Tab-group UI is blocked'); } };
+  const result = await automation.run('dialog', { tabId: 2, action: 'accept' });
+  assert.equal(result.handled, true);
+});
 test('event capture is bounded and removed tabs release retained data', async () => {
   const { automation, listeners } = mock();
   for (let i = 0; i < 350; i++) listeners.event({ tabId: 5 }, 'Runtime.consoleAPICalled', { type: 'log', timestamp: i, args: [{ value: i }] });

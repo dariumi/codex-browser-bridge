@@ -28,6 +28,14 @@ try {
   await step('tabs and activation', async () => {
     assert.ok((await json('tabs')).some((tab) => tab.tabId === tabId)); await call('activate_tab', { tabId });
   });
+  await step('extension commands and working-tab group', async () => {
+    const info = await json('extension_command', { command: 'capabilities' }); assert.equal(info.version, '0.2.0');
+    const work = await json('workspace', { action: 'mark', label: 'Codex · smoke test' });
+    assert.ok(work.groupId >= 0);
+    const group = await json('extension_command', { command: 'invoke', method: 'tabGroups.get', arguments: [work.groupId] });
+    assert.equal(group.color, 'purple'); assert.equal(group.title, 'Codex · smoke test');
+    const snapshot = await json('workspace', { action: 'inspect' }); assert.ok(snapshot.tabs.some((tab) => tab.tabId === tabId));
+  });
   await step('snapshot refs, form fill, and trusted click', async () => {
     const snapshot = await json('snapshot');
     const field = snapshot.nodes.find((node) => node.role === 'textbox' && node.name === 'Имя');

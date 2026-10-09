@@ -1,6 +1,6 @@
 {
   "name": "codex-browser-bridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Control your existing Chromium browser from Codex through a local MCP and extension bridge",
   "private": true,
   "engines": {
@@ -15,7 +15,9 @@
     "test": "node --test test/*.test.js",
     "test:browser": "node scripts/browser-smoke.js",
     "fixture": "node scripts/fixture.js",
-    "package": "node scripts/package.js"
+    "package": "node scripts/package.js",
+    "icons": "node scripts/icons.js",
+    "test:handoff": "node scripts/handoff-smoke.js"
   },
   "keywords": [],
   "author": "",
@@ -25,5 +27,8 @@
     "@modelcontextprotocol/sdk": "^1.32.1",
     "ws": "^8.22.0",
     "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.5"
   }
 }

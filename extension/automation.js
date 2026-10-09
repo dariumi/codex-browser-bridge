@@ -2,8 +2,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const supportedUrl = (url) => /^(https?:|file:|about:blank)/.test(url || '');
 
 export class BrowserAutomation {
-  constructor(api = chrome) {
+  constructor(api = chrome, workspace = null) {
     this.api = api;
+    this.workspace = workspace;
     this.attached = new Set();
     this.logs = new Map();
     this.requests = new Map();
@@ -184,10 +185,12 @@ export class BrowserAutomation {
       return this.loaded(tab.id);
     }
     if (action === 'activate_tab') { const tab = await api.tabs.update(args.tabId, { active: true }); await api.windows.update(tab.windowId, { focused: true }); return { tabId: tab.id }; }
-    if (action === 'close_tab') { await api.tabs.remove(args.tabId); return { closed: args.tabId }; }
+    if (action === 'close_tab') { await this.workspace?.release(args.tabId); await api.tabs.remove(args.tabId); return { closed: args.tabId }; }
     if (action === 'downloads') return (await api.downloads.search({ limit: 30, orderBy: ['-startTime'] })).map(({ id, filename, url, state, bytesReceived, totalBytes, error }) => ({ id, filename, url, state, bytesReceived, totalBytes, error }));
-    if (action === 'detach') { await api.debugger.detach({ tabId: args.tabId }); this.attached.delete(args.tabId); this.persistAttachments(); return { detached: args.tabId }; }
+    if (action === 'detach') { await api.debugger.detach({ tabId: args.tabId }); this.attached.delete(args.tabId); this.persistAttachments(); await this.workspace?.release(args.tabId); return { detached: args.tabId }; }
     const tabId = (await this.tab(args.tabId)).id;
+    // Modal control must not wait for browser UI operations (grouping/badges).
+    if (action !== 'dialog') await this.workspace?.mark(tabId);
     if (action === 'navigate') {
       if (!/^https?:\/\//.test(args.url)) throw new Error('Only HTTP(S) URLs can be opened');
       await api.tabs.update(tabId, { url: args.url }); return this.loaded(tabId);

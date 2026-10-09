@@ -10,6 +10,10 @@ const target = {
 const point = z.object({ x: z.number().nonnegative(), y: z.number().nonnegative() });
 const tool = (name, description, schema, readOnly = false) => ({ name: `browser_${name}`, action: name, description, schema, readOnly });
 export const tools = [
+  tool('workspace', 'Mark a working tab as a purple Codex group with an on-page indicator, release it to the user, or inspect marked tabs.', { ...tab, action: z.enum(['mark', 'release', 'inspect']).default('inspect'), label: z.string().max(60).optional() }),
+  tool('extension_command', 'Send a named command directly to the extension. Discover allowed Chrome APIs with capabilities; invoke uses an argument array. No remote extension eval. Reload disconnects briefly.', { command: z.enum(['capabilities', 'invoke', 'reload']), method: z.string().optional(), arguments: z.array(z.unknown()).max(5).default([]) }),
+  tool('task', 'Inspect tasks from extension chat, start a task on an explicit tab, steer it, or stop it. Handoff keeps a Codex goal active until completion or a reported limit/blocker.', { action: z.enum(['list', 'inspect', 'start', 'steer', 'cancel']).default('list'), taskId: z.string().optional(), ...tab, text: z.string().max(12000).optional(), mode: z.enum(['browser', 'development']).default('browser'), handoff: z.boolean().default(true) }),
+  tool('development', 'Development-mode source checkpoints, validation, apply, or rollback. Mutations require an active task explicitly submitted in development mode. Apply requires passing checks for the current source digest and restarts only after task completion. Supply checkpointId to roll back an earlier update.', { action: z.enum(['status', 'checkpoint', 'validate', 'apply', 'rollback']).default('status'), checkpointId: z.string().uuid().optional() }),
   tool('status', 'Check the local bridge and browser connection. Works before an extension is connected.', {}, true),
   tool('tabs', 'List browser tabs with IDs, titles, URLs, and active status.', {}, true),
   tool('new_tab', 'Open an HTTP(S) URL in a new tab.', { url: z.string().url(), active: z.boolean().default(true) }),

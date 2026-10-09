@@ -9,5 +9,5 @@ for (const dir of ['server', 'extension', 'scripts', 'test']) {
   }
 }
 const manifest = JSON.parse(await readFile(new URL('../extension/manifest.json', import.meta.url)));
-for (const filename of [manifest.background.service_worker, manifest.action.default_popup, manifest.options_ui.page]) await readFile(new URL(`../extension/${filename}`, import.meta.url));
+for (const filename of [manifest.background.service_worker, manifest.action.default_popup, manifest.options_ui.page, manifest.side_panel?.default_path, ...Object.values(manifest.icons || {}), ...(manifest.content_scripts || []).flatMap((script) => script.js || [])].filter(Boolean)) await readFile(new URL(`../extension/${filename}`, import.meta.url));
 console.log('JavaScript syntax and extension manifest: OK');

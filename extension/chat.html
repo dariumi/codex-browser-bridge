@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Чат Codex</title><link rel="stylesheet" href="ui.css"><link rel="stylesheet" href="chat.css"></head>
+<body class="chat"><header><img src="assets/avatar-128.png" alt=""><div><h1>Codex Browser Bridge</h1><span id="connection">Проверяем соединение…</span></div></header>
+<section class="target"><span class="eyebrow">РАБОЧАЯ ВКЛАДКА</span><strong id="target-title">Загрузка…</strong><span id="target-url"></span><button class="secondary compact" id="use-tab">Использовать открытую вкладку</button></section>
+<div class="settings-row"><label for="mode">Режим</label><select id="mode"><option value="browser">Работа на странице</option><option value="development">Доработка расширения</option></select></div>
+<label class="handoff"><input id="handoff" type="checkbox" checked>Передать управление до завершения задачи</label>
+<p class="hint" id="mode-hint">Codex выполнит этапы и проверит результат. Лимит одного запуска: 30 минут или 20 ходов.</p>
+<section id="progress" hidden><div class="task-heading"><strong id="task-state"></strong><button id="stop" class="secondary compact">Остановить</button></div><ol id="plan"></ol><p id="activity" class="hint"></p></section>
+<section id="messages" aria-live="polite"></section><p id="error" class="error" role="alert"></p>
+<form id="composer"><label class="sr-only" for="prompt">Задача для Codex</label><textarea id="prompt" placeholder="Например: пройди тестирование на этой странице и сообщи результат" maxlength="12000" required></textarea><button id="send" type="submit">Передать задачу</button></form>
+<details id="history"><summary>Предыдущие задачи</summary><div id="history-list"></div></details>
+<footer><a href="options.html" target="_blank">Настройки подключения</a></footer>
+<script type="module" src="chat.js"></script></body></html>
