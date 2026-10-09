@@ -2,9 +2,11 @@ import { api as chrome, capabilities, openChat } from './platform.js';
 import { FirefoxAutomation } from './firefox-automation.js';
 import { BrowserAutomation } from './automation.js';
 import { BrowserWorkspace } from './workspace.js';
+import { AccessPolicy, policyInstruction } from './access-policy.js';
+import { CommandGuard } from './command-guard.js';
 import { extensionCommand } from './commands.js';
 
-const workspace = new BrowserWorkspace(chrome);
+const workspace = new BrowserWorkspace(chrome, { owner: () => tasksState.activeTaskId, target: () => tasksState.tasks.find(task => task.id === tasksState.activeTaskId)?.tabId });
 const automation = chrome.debugger ? new BrowserAutomation(chrome, workspace) : new FirefoxAutomation(chrome, workspace);
 let socket = null, heartbeat = null, retry = null, generation = 0, authBlocked = false;
 let state = { connected: false, enabled: false, error: null };
@@ -21,14 +23,18 @@ function uiRequest(action, args = {}) {
     socket.send(JSON.stringify({ type: 'ui_request', id, action, args }));
   });
 }
-async function browserCommand(action, args) {
-  if (action === 'extension_command') return extensionCommand(chrome, args);
-  if (action === 'workspace') {
-    if (args.action === 'inspect') { await workspace.ready; return { tabs: [...workspace.work.values()] }; }
-    const tabId = args.tabId || (await automation.tab()).id;
-    return args.action === 'release' ? workspace.release(tabId) : workspace.mark(tabId, args.label);
+const policy = new AccessPolicy(chrome, {
+  scope: () => tasksState.activeTaskId || 'manual',
+  changed: data => broadcast({ type: 'policy_update', data }),
+  event: event => {
+    if (socket?.readyState === WebSocket.OPEN && state.connected) socket.send(JSON.stringify({ type: 'permission_event', event }));
+    if (event.type === 'pending') chrome.notifications.create(`access-${event.request.id}`, { type: 'basic', iconUrl: 'assets/avatar-128.png', title: 'Codex запрашивает разрешение', message: `${event.request.host} · ${event.request.kind === 'advanced' ? 'JavaScript / CDP' : event.request.reason}. Решение доступно в чате расширения.` }).catch(() => {});
   }
-  return automation.run(action, args);
+});
+const guard = new CommandGuard(chrome, automation, workspace, policy);
+async function browserCommand(action, args, validate) {
+  const result = await guard.run(action, args, validate);
+  return action === 'extension_command' && result === null ? extensionCommand(chrome, args) : result;
 }
 const badge = (text, color) => { chrome.action.setBadgeText({ text }); chrome.action.setBadgeBackgroundColor({ color }); };
 const validate = (settings) => {
@@ -54,7 +60,7 @@ async function connect() {
   ws.onmessage = async ({ data }) => {
     let message;
     try { message = JSON.parse(data); } catch { return; }
-    if (message.type === 'ready') { state.connected = true; state.error = null; badge('ON', '#168457'); return; }
+    if (message.type === 'ready') { state.connected = true; uiRequest('list').then(data => { tasksState = data; broadcast({ type: 'tasks_update', data }); }).catch(() => {}); state.error = null; badge('ON', '#168457'); return; }
     if (message.type === 'ui_result') {
       const pending = uiPending.get(message.id);
       if (pending) { clearTimeout(pending.timer); uiPending.delete(message.id); message.error ? pending.reject(new Error(message.error)) : pending.resolve(message.result); }
@@ -72,9 +78,8 @@ async function connect() {
         if (epoch !== generation) throw new Error('Browser control was paused');
         if (Date.now() > message.expiresAt) throw new Error('Command expired before execution');
       };
-      const special = ['extension_command', 'workspace'].includes(message.action);
       validateCommand();
-      const result = special ? await browserCommand(message.action, message.args) : await automation.run(message.action, message.args, validateCommand);
+      const result = await browserCommand(message.action, message.args, validateCommand);
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'result', id: message.id, result }));
     } catch (error) {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'result', id: message.id, error: error.message }));
@@ -100,7 +105,7 @@ async function disconnect() {
   for (const pending of uiPending.values()) { clearTimeout(pending.timer); pending.reject(new Error('Соединение отключено.')); } uiPending.clear();
   state.connected = false;
   await automation.detachAll();
-  await workspace.releaseAll();
+  await workspace.releaseAll(); await policy.reset();
   badge('', '#8b6470');
 }
 
@@ -118,7 +123,15 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   // Content scripts cannot submit tasks or read chat, configuration, or connection keys.
   if (!sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({ error: 'Extension UI only' }); return; }
   (async () => {
-    if (message.type === 'status') return { ...state, version: chrome.runtime.getManifest().version, attachedTabs: [...automation.attached], workingTabs: [...workspace.work.values()], activeTaskId: tasksState.activeTaskId, capabilities: capabilities(chrome) };
+    if (message.type === 'status') return { ...state, version: chrome.runtime.getManifest().version, attachedTabs: [...automation.attached], workingTabs: [...workspace.work.values()], activeTaskId: tasksState.activeTaskId, temporaryTabs: [...workspace.created.values()], capabilities: capabilities(chrome) };
+    if (message.type === 'policy_status') { await policy.ready; return policy.state(); }
+    if (message.type === 'policy_decide') return policy.decide(message.id, message.allowed === true);
+    if (message.type === 'policy_set') return policy.setRule(message.domain, message.mode);
+    if (message.type === 'workspace_control') {
+      if (tasksState.activeTaskId && ['release_all', 'cleanup'].includes(message.action)) throw new Error('Сначала остановите текущую задачу.');
+      if (!['release_all', 'collapse', 'merge', 'cleanup', 'keep'].includes(message.action)) throw new Error('Invalid workspace control');
+      return browserCommand('workspace', { action: message.action, tabId: message.tabId });
+    }
     if (message.type === 'chat_context') {
       const tab = await automation.tab(message.tabId || chatTabId);
       return { tabId: tab.id, title: tab.title, url: tab.url, connected: state.connected };
@@ -127,10 +140,19 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (message.type === 'chat_tasks') { tasksState = await uiRequest('list'); return tasksState; }
     if (message.type === 'chat_start') {
       const tab = await automation.tab(message.tabId || chatTabId);
+      const rule = policyInstruction(message.text, tab.url);
+      if (rule) return { policyUpdated: true, ...await policy.setRule(rule.domain, rule.mode) };
+      await policy.ensure(tab.url, 'chat_start');
       return uiRequest('start', { text: message.text, tabId: tab.id, title: tab.title, url: tab.url, mode: message.mode, handoff: message.handoff });
     }
     if (message.type === 'chat_control') {
       if (!['cancel', 'steer'].includes(message.action)) throw new Error('Invalid task control');
+      if (message.action === 'steer') {
+        const task = tasksState.tasks.find(item => item.id === message.taskId);
+        const tab = await automation.tab(task?.tabId || chatTabId);
+        const rule = policyInstruction(message.text, tab.url);
+        if (rule) return { policyUpdated: true, ...await policy.setRule(rule.domain, rule.mode) };
+      }
       return uiRequest(message.action, { taskId: message.taskId, text: message.text });
     }
     if (message.type === 'open_chat') {
@@ -165,5 +187,13 @@ chrome.runtime.onInstalled.addListener(async () => {
   }
 });
 chrome.runtime.onStartup.addListener(() => { chrome.alarms.create('reconnect', { periodInMinutes: 0.5 }); connect(); });
-chrome.alarms.onAlarm.addListener(({ name }) => { if (name === 'reconnect' && !socket) connect(); });
+chrome.alarms.onAlarm.addListener(({ name }) => { if (name === 'reconnect' && !socket) connect(); if (name === 'access_expiry') policy.sync().catch(() => {}); });
 connect();
+
+chrome.webNavigation?.onCreatedNavigationTarget.addListener(({ sourceTabId, tabId }) => {
+  if (policy.tabs.has(sourceTabId)) policy.track(tabId).then(() => workspace.register(tabId, true)).catch(() => {});
+});
+
+chrome.webNavigation?.onErrorOccurred.addListener(details => {
+  if (policy.tabs.has(details.tabId) && /^https?:/.test(details.url) && policy.rule(new URL(details.url).hostname)) policy.request(details.url, 'blocked_navigation').catch(() => {});
+});

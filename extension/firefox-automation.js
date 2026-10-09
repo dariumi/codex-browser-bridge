@@ -6,7 +6,7 @@ export class FirefoxAutomation {
     api.tabs.onRemoved.addListener((id) => this.attached.delete(id));
   }
   run(action, args = {}, validate = () => {}) {
-    const result = this.tail.then(() => { validate(); return this.execute(action, args); });
+    const result = this.tail.then(async () => { await validate(); return this.execute(action, args); });
     this.tail = result.catch(() => {}); return result;
   }
   async tab(tabId) {
@@ -44,7 +44,7 @@ export class FirefoxAutomation {
     if (action === 'downloads') return api.downloads.search({ limit: 30, orderBy: ['-startTime'] });
     if (['cdp', 'upload', 'dialog', 'console', 'network'].includes(action)) throw new Error(`${action} is unavailable in the Firefox DOM backend. Use Chromium for CDP, trusted input, file upload, native dialogs and network/console recording.`);
     const tab = await this.tab(args.tabId), tabId = tab.id;
-    if (!/^https?:/.test(tab.url || '')) throw new Error('Open a regular HTTP(S) page to use Firefox automation');
+    if (!/^https?:/.test(tab.url || '') && !(action === 'navigate' && tab.url === 'about:blank')) throw new Error('Open a regular HTTP(S) page to use Firefox automation');
     await this.workspace.mark(tabId); this.attached.add(tabId);
     if (action === 'navigate') { if (!/^https?:\/\//.test(args.url)) throw new Error('Only HTTP(S) URLs can be opened'); return this.navigateWait(tabId, () => api.tabs.update(tabId, { url: args.url })); }
     if (action === 'history') { return this.navigateWait(tabId, () => args.direction === 'reload' ? api.tabs.reload(tabId) : args.direction === 'back' ? api.tabs.goBack(tabId) : api.tabs.goForward(tabId)); }

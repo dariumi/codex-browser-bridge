@@ -37,7 +37,7 @@ test('handoff continues after an incomplete turn and succeeds only when goal com
   await manager.notification({ method: 'item/completed', params: { threadId: task.threadId, item: { type: 'agentMessage', id: 'message', text: 'All stages verified', phase: 'final_answer' } } });
   await manager.notification({ method: 'turn/completed', params: { threadId: task.threadId, turn: { status: 'completed' } } });
   assert.equal(task.status, 'completed'); assert.equal(task.result, 'All stages verified');
-  assert.equal(commands.at(-1).args.action, 'release');
+  assert.equal(commands.at(-1).args.action, 'finish');
 });
 test('task errors and cancellation are not reported as success; simultaneous tasks rejected', async (t) => {
   const { app, manager, waitRunning } = await fixture(t);
@@ -65,4 +65,39 @@ test('tasks retain the resolved model and service rerouting rather than guessing
   assert.equal(task.model, 'configured-model'); assert.equal(task.effort, 'high');
   await manager.notification({ method: 'model/rerouted', params: { threadId: task.threadId, fromModel: task.model, toModel: 'actual-model' } });
   assert.equal(task.model, 'actual-model'); assert.equal(task.modelReroutedFrom, 'configured-model');
+});
+test('permission requests interrupt execution, wait without new turns, and resume only after all UI approvals', async t => {
+  const { app, manager, waitRunning } = await fixture(t);
+  await manager.handle('start', { text: 'Inspect page', tabId: 4 }); const task = await waitRunning();
+  const request = { id: 'request-1', scope: task.id, host: 'bank.example', kind: 'site' };
+  await manager.permissionEvent({ type: 'pending', request }); assert.equal(task.status, 'waiting_permission'); assert.equal(manager.active.id, task.id);
+  await manager.notification({ method: 'turn/completed', params: { threadId: task.threadId, turn: { status: 'interrupted' } } }); assert.equal(app.turns, 1);
+  const second = { ...request, id: 'request-2', host: 'mail.example' }; await manager.permissionEvent({ type: 'pending', request: second });
+  await manager.permissionEvent({ type: 'decision', request, allowed: true }); assert.equal(task.status, 'waiting_permission'); assert.equal(app.turns, 1);
+  await manager.permissionEvent({ type: 'decision', request: second, allowed: true }); assert.equal(task.status, 'running'); assert.equal(app.turns, 2);
+});
+test('permission refusal never reports success, and waiting tasks remain cancellable', async t => {
+  const { manager, waitRunning } = await fixture(t);
+  await manager.handle('start', { text: 'Inspect page', tabId: 4 }); const task = await waitRunning();
+  const request = { id: 'request-1', scope: task.id, host: 'bank.example', kind: 'site' };
+  await manager.permissionEvent({ type: 'pending', request }); await manager.permissionEvent({ type: 'decision', request, allowed: false });
+  assert.equal(task.status, 'blocked'); assert.match(task.error, /не разрешил/);
+  await manager.handle('start', { text: 'Inspect another page', tabId: 5 }); const next = await waitRunning();
+  await manager.permissionEvent({ type: 'pending', request: { ...request, scope: next.id } }); await manager.handle('cancel', { taskId: next.id }); assert.equal(next.status, 'interrupted');
+});
+
+test('a quick UI approval waits for interruption and late old-turn completion cannot stop the resumed task', async t => {
+  const { app, manager, waitRunning } = await fixture(t);
+  await manager.handle('start', { text: 'Inspect page', tabId: 4 }); const task = await waitRunning(), oldTurn = task.turnId;
+  let release, interruptStarted;
+  const started = new Promise(resolve => { interruptStarted = resolve; }), request = app.request.bind(app);
+  app.request = async (method, params) => { if (method === 'turn/interrupt') { interruptStarted(); await new Promise(resolve => { release = resolve; }); } return request(method, params); };
+  const permission = { id: 'quick', scope: task.id, host: 'bank.example', kind: 'site' };
+  const pending = manager.permissionEvent({ type: 'pending', request: permission }); await started;
+  const decision = manager.permissionEvent({ type: 'decision', request: permission, allowed: true });
+  await new Promise(resolve => setTimeout(resolve, 5)); assert.equal(app.turns, 1);
+  release(); await pending; await decision; assert.equal(app.turns, 2);
+  await manager.notification({ method: 'turn/completed', params: { threadId: task.threadId, turn: { id: oldTurn, status: 'interrupted' } } });
+  assert.equal(task.status, 'running');
+  app.request = request;
 });

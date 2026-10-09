@@ -12,4 +12,6 @@
   </form>
   <p id="status" role="status" aria-live="polite"></p>
   <p>Codex получает доступ к вкладкам и страницам вашего профиля. Управление можно отключить в любой момент кнопкой расширения. Данные проходят через локальный мост без внешнего сервиса.</p>
-</main><script type="module" src="options.js"></script></body></html>
+<section class="access-settings"><h2>Доступ к сайтам</h2><p>По умолчанию спрашиваем разрешение для перечисленных банков, платежей, почты, сообщений и личных файлов. Доменное правило действует также на поддомены. Список не охватывает все чувствительные сайты — добавьте свои.</p><div id="permission-requests" hidden></div>
+<form id="access-form"><label for="access-domain">Домен или URL</label><input id="access-domain" placeholder="example.com" required><label for="access-mode">Правило</label><select id="access-mode"><option value="ask">Спросить перед доступом</option><option value="deny">Запретить доступ</option><option value="allow">Удалить правило для этого домена</option></select><div class="actions"><button type="submit">Сохранить правило</button></div></form><p id="policy-feedback" class="hint" role="status"></p><details><summary>Защищённые домены</summary><div id="access-rules"></div></details><p>JavaScript и CDP требуют отдельного разрешения. Решения принимает пользователь здесь или в чате расширения. Отключение управления отзывает разрешения.</p></section>
+</main><script type="module" src="policy-ui.js"></script><script type="module" src="options.js"></script></body></html>

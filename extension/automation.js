@@ -43,8 +43,8 @@ export class BrowserAutomation {
   // Serial execution prevents simultaneous gestures and unexpected focus changes.
   run(action, args, validate = () => {}) {
     // Dialog control must unblock an evaluate/click waiting for a modal dialog.
-    if (action === 'dialog') { validate(); return this.execute(action, args); }
-    const result = this.tail.then(() => { validate(); return this.execute(action, args); });
+    if (action === 'dialog') return Promise.resolve().then(validate).then(() => this.execute(action, args));
+    const result = this.tail.then(async () => { await validate(); return this.execute(action, args); });
     this.tail = result.catch(() => {});
     return result;
   }

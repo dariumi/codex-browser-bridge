@@ -20,6 +20,8 @@ test('content scripts cannot submit tasks or read extension status; launcher onl
   const content = { id, url: 'https://example.com', tab: { id: 9 } };
   assert.equal((await send({ type: 'chat_start', text: 'untrusted task' }, content)).error, 'Extension UI only');
   assert.equal((await send({ type: 'status' }, content)).error, 'Extension UI only');
+  assert.equal((await send({ type: 'policy_decide', id: 'forged', allowed: true }, content)).error, 'Extension UI only');
+  assert.equal((await send({ type: 'policy_set', domain: 'bank.example', mode: 'allow' }, content)).error, 'Extension UI only');
   assert.equal((await send({ type: 'open_chat' }, content)).ok, true); assert.equal(opened, 9);
   const status = await send({ type: 'status' }, { id, url: url + 'chat.html' });
   assert.equal(status.version, '0.2.0'); assert.equal(status.enabled, false);

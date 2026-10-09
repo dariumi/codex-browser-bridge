@@ -1,7 +1,7 @@
 import { api as chrome } from './platform.js';
 const $ = (id) => document.getElementById(id);
 let context = null, taskState = { tasks: [], activeTaskId: null }, selectedId = null, displayedTask = null;
-const statuses = { starting: 'Запускаем Codex…', running: 'Codex работает', cancelling: 'Останавливаем…', completed: 'Задача завершена', failed: 'Ошибка выполнения', interrupted: 'Остановлено', blocked: 'Нужны дополнительные данные', limited: 'Достигнут лимит запуска' };
+const statuses = { starting: 'Запускаем Codex…', waiting_permission: 'Ждёт твоего разрешения', running: 'Codex работает', cancelling: 'Останавливаем…', completed: 'Задача завершена', failed: 'Ошибка выполнения', interrupted: 'Остановлено', blocked: 'Нужны дополнительные данные', limited: 'Достигнут лимит запуска' };
 async function send(message) { const reply = await chrome.runtime.sendMessage(message); if (reply?.error) throw new Error(reply.error); return reply; }
 function error(text) { $('error').textContent = text || ''; }
 async function target(tabId) {
@@ -20,11 +20,11 @@ function render() {
   $('mode').disabled = running; $('handoff').disabled = running; $('use-tab').disabled = running;
   displayedTask = task; renderAccount(taskState.account, task);
   $('welcome').hidden = !!task;
-  $('progress').classList.toggle('running', running); $('progress').dataset.status = task?.status || 'idle';
+  $('progress').classList.toggle('running', running && active.status !== 'waiting_permission'); $('progress').dataset.status = task?.status || 'idle';
   $('progress').hidden = !task; $('stop').hidden = !running;
   $('task-state').textContent = statuses[task?.status] || task?.status || '';
-  $('work-caption').textContent = running ? 'CODEX В ДЕЛЕ' : task?.status === 'completed' ? 'ГОТОВО' : 'ВЫПОЛНЕНИЕ ОСТАНОВЛЕНО';
-  $('activity').textContent = task?.error || (running ? activityLabel(task.activity) : task?.status === 'completed' ? 'Результат проверен · отчёт ниже' : 'Ход работы сохранён');
+  $('work-caption').textContent = active?.status === 'waiting_permission' ? 'НУЖНО РАЗРЕШЕНИЕ' : running ? 'CODEX В ДЕЛЕ' : task?.status === 'completed' ? 'ГОТОВО' : 'ВЫПОЛНЕНИЕ ОСТАНОВЛЕНО';
+  $('activity').textContent = task?.error || (active?.status === 'waiting_permission' ? 'Выбери «Разрешить» или «Отказать» выше' : running ? activityLabel(task.activity) : task?.status === 'completed' ? 'Результат проверен · отчёт ниже' : 'Ход работы сохранён');
   const completed = (task?.plan || []).filter(step => step.status === 'completed').length;
   $('step-count').textContent = task?.plan?.length ? `${completed} из ${task.plan.length} этапов` : running ? task.status === 'starting' ? 'Готовится к запуску' : 'Выполняет задачу' : '';
   $('turn-count').textContent = task?.turns ? `${task.turns} / 20 ходов` : '';
@@ -49,11 +49,14 @@ $('composer').addEventListener('submit', async (event) => {
   event.preventDefault(); error(''); $('send').disabled = true;
   try {
     const text = $('prompt').value.trim(); if (!text) return;
-    if (taskState.activeTaskId) await send({ type: 'chat_control', action: 'steer', taskId: taskState.activeTaskId, text });
+    if (taskState.activeTaskId) {
+      const result = await send({ type: 'chat_control', action: 'steer', taskId: taskState.activeTaskId, text });
+      if (result.policyUpdated) $('policy-feedback').textContent = `${result.domain}: ${result.mode === 'deny' ? 'доступ запрещён' : 'теперь требуется разрешение'}`;
+    }
     else {
       if (!context) await target();
       const task = await send({ type: 'chat_start', tabId: context.tabId, text, mode: $('mode').value, handoff: $('handoff').checked });
-      selectedId = task.id;
+      if (task.policyUpdated) $('policy-feedback').textContent = `${task.domain}: ${task.mode === 'deny' ? 'доступ запрещён' : 'теперь требуется разрешение'}`; else selectedId = task.id;
     }
     $('prompt').value = ''; taskState = await send({ type: 'chat_tasks' }); render();
   } catch (err) { error(err.message); } finally { $('send').disabled = false; }
@@ -75,7 +78,7 @@ try { await target(); taskState = await send({ type: 'chat_tasks' }); render(); 
 setInterval(updateElapsed, 1000);
 setInterval(refreshAccount, 60000);
 setInterval(async () => {
-  try { const status = await send({ type: 'status' }); $('connection').textContent = status.connected ? 'Подключено к локальному Codex' : 'Нет соединения с мостом'; $('connection').className = 'connection ' + (status.connected ? 'good' : 'error'); $('browser-name').textContent = status.capabilities?.browser === 'firefox' ? 'Firefox' : 'Chromium'; } catch { /* Worker is reloading. */ }
+  try { const status = await send({ type: 'status' }); $('connection').textContent = status.connected ? 'Подключено к локальному Codex' : 'Нет соединения с мостом'; $('connection').className = 'connection ' + (status.connected ? 'good' : 'error'); renderTemporary(status); $('browser-name').textContent = status.capabilities?.browser === 'firefox' ? 'Firefox' : 'Chromium'; } catch { /* Worker is reloading. */ }
 }, 1500);
 
 function activityLabel(activity) {
@@ -85,7 +88,7 @@ function activityLabel(activity) {
 function updateElapsed() {
   const task = displayedTask;
   if (!task) { $('elapsed').textContent = ''; return; }
-  const end = ['starting', 'running', 'cancelling'].includes(task.status) ? Date.now() : Date.parse(task.updatedAt || task.createdAt);
+  const end = ['starting', 'running', 'cancelling', 'waiting_permission'].includes(task.status) ? Date.now() : Date.parse(task.updatedAt || task.createdAt);
   const seconds = Math.max(0, Math.floor((end - Date.parse(task.createdAt)) / 1000));
   $('elapsed').textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
@@ -124,3 +127,12 @@ async function refreshAccount(force = false) {
 $('refresh-account').addEventListener('click', () => refreshAccount(true));
 for (const button of document.querySelectorAll('[data-prompt]')) button.addEventListener('click', () => { $('prompt').value = button.dataset.prompt; $('prompt').focus(); });
 $('prompt').addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); $('composer').requestSubmit(); } });
+
+function renderTemporary(status) {
+  const box = $('temporary-tabs'); if (!box) return; box.replaceChildren();
+  for (const tab of status.temporaryTabs || []) if (tab.temporary) {
+    const row = document.createElement('div'); row.className = 'temporary-row'; row.append(document.createTextNode(`Временная вкладка ${tab.tabId}`));
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary compact'; button.textContent = 'Сохранить';
+    button.onclick = async () => { try { await send({ type: 'workspace_control', action: 'keep', tabId: tab.tabId }); row.remove(); } catch (err) { error(err.message); } }; row.append(button); box.append(row);
+  }
+}

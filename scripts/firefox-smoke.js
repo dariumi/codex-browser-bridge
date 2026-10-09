@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, cp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -8,6 +8,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { createBroker } from '../server/broker.js';
 import { startFixture } from './fixture.js';
+import { prepareTestAddon } from './test-addon.js';
+import { policySmoke } from './policy-smoke.js';
 
 const dir = await mkdtemp(path.join(tmpdir(), 'codex-firefox-'));
 let broker, fixture, runner, tabId, client;
@@ -16,18 +18,13 @@ const results = [];
 try {
   const token = randomBytes(32).toString('hex');
   broker = await createBroker({ port: 0, token }); fixture = await startFixture(0);
-  await cp('extension', dir, { recursive: true });
-  await writeFile(path.join(dir, 'manifest.json'), await readFile('extension/manifest.firefox.json'));
-  await rm(path.join(dir, 'manifest.firefox.json'));
-  // Test-only bootstrap lives in an isolated temporary add-on, never in the distributable.
-  const background = await readFile(path.join(dir, 'background.js'), 'utf8');
-  await writeFile(path.join(dir, 'background.js'), `await (globalThis.browser || globalThis.chrome).storage.local.set(${JSON.stringify({ url: `ws://127.0.0.1:${broker.port}/extension`, token, enabled: true })});\n` + background);
+  await prepareTestAddon(dir, { url: `ws://127.0.0.1:${broker.port}/extension`, token, enabled: true }, true);
   runner = await webExt.cmd.run({ sourceDir: dir, artifactsDir: path.join(dir, 'artifacts'), firefox: process.env.FIREFOX_BIN || 'firefox', noReload: true, noInput: true, startUrl: [fixture.url], args: ['-headless'], target: ['firefox-desktop'] }, { shouldExitProgram: false });
   const deadline = Date.now() + 30000;
   while (!broker.status().connected && Date.now() < deadline) await new Promise(r => setTimeout(r, 200));
   assert.equal(broker.status().connected, true, 'Firefox extension did not authenticate'); assert.equal(broker.status().browser, 'firefox');
   await writeFile(connectionPath, JSON.stringify({ port: broker.port, token }), { mode: 0o600 });
-  client = new Client({ name: 'firefox-smoke', version: '0.3.0' });
+  client = new Client({ name: 'firefox-smoke', version: '0.4.0' });
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.resolve('server/mcp.js')], env: { ...process.env, BROWSER_BRIDGE_CONFIG: connectionPath }, stderr: 'inherit' }));
   const call = async (action, args = {}) => {
     const reply = await client.callTool({ name: `browser_${action}`, arguments: { ...(tabId ? { tabId } : {}), ...args } });
@@ -61,7 +58,7 @@ try {
   await step('viewport screenshot and honest unsupported actions', async () => {
     const screenshot = await call('screenshot'); assert.ok(screenshot.data.length > 1000); assert.ok(screenshot.viewport.width > 0);
     await mkdir('.local', { recursive: true }); await writeFile('.local/firefox-viewport.png', Buffer.from(screenshot.data, 'base64'));
-    await assert.rejects(call('cdp', { method: 'Page.enable' }), /unavailable/); await assert.rejects(call('screenshot', { fullPage: true }), /Full-page/);
+    await assert.rejects(call('cdp', { method: 'Page.getLayoutMetrics' }), /unavailable/); await assert.rejects(call('screenshot', { fullPage: true }), /Full-page/);
   });
   await step('workspace release and navigation', async () => {
     assert.ok((await call('workspace', { action: 'inspect' })).tabs.some(t => t.tabId === tabId));
@@ -69,6 +66,7 @@ try {
     await call('detach'); assert.equal((await call('workspace', { action: 'inspect' })).tabs.length, 0);
     await call('close_tab');
   });
+  tabId = null; await policySmoke(call, step);
   await writeFile('.local/firefox-results.json', JSON.stringify({ browser: 'Firefox', passed: true, results }, null, 2));
 } finally {
   await client?.close(); await runner?.exit(); await broker?.close(); await fixture?.close(); await rm(dir, { recursive: true, force: true }); await rm(connectionPath, { force: true });

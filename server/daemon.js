@@ -14,6 +14,7 @@ try {
   const tasks = new TaskManager({ command: (action, args) => broker.command(action, args), development });
   await tasks.ready;
   broker = await createBroker({ ...config, handlers: {
+    permission: event => tasks.permissionEvent(event),
     task: (args) => tasks.handle(args.action, args),
     development: (args) => development.handle(args.action, args),
     ui: (action, args) => tasks.handle(action, args)

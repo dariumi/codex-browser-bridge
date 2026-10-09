@@ -12,7 +12,7 @@ export async function createBroker({ port, token, commandTimeout = 45000, handle
   let browser = null, capabilities = null;
   const pending = new Map();
   const sockets = new Set();
-  const status = () => ({ service: 'codex-browser-bridge', version: '0.3.0', connected: extension?.readyState === WebSocket.OPEN, extensionVersion, browser, capabilities, connectedAt, pending: pending.size });
+  const status = () => ({ service: 'codex-browser-bridge', version: '0.4.0', connected: extension?.readyState === WebSocket.OPEN, extensionVersion, browser, capabilities, connectedAt, pending: pending.size });
   const rejectPending = (message) => { for (const item of pending.values()) item.reject(new Error(message)); pending.clear(); };
   const command = async (action, args) => {
     if (handlers[action]) return handlers[action](args);
@@ -30,7 +30,7 @@ export async function createBroker({ port, token, commandTimeout = 45000, handle
     // No web-page callers, no CORS, and no DNS-rebinding hosts.
     if (req.headers.host !== `127.0.0.1:${server.address().port}` && req.headers.host !== `localhost:${server.address().port}`) return json(res, 403, { error: 'Invalid host' });
     if (req.headers.origin) return json(res, 403, { error: 'Browser origins are not allowed on the command endpoint' });
-    if (req.method === 'GET' && req.url === '/health') return json(res, 200, { service: 'codex-browser-bridge', version: '0.3.0' });
+    if (req.method === 'GET' && req.url === '/health') return json(res, 200, { service: 'codex-browser-bridge', version: '0.4.0' });
     if (!equal(req.headers.authorization, `Bearer ${token}`)) return json(res, 401, { error: 'Unauthorized' });
     if (req.method === 'GET' && req.url === '/status') return json(res, 200, status());
     if (req.method !== 'POST' || req.url !== '/command') return json(res, 404, { error: 'Not found' });
@@ -69,9 +69,10 @@ export async function createBroker({ port, token, commandTimeout = 45000, handle
         authenticated = true; clearTimeout(authTimer); extension = ws; connectedAt = new Date().toISOString();
         browser = message.browser || 'chromium'; capabilities = message.capabilities || null;
         extensionVersion = typeof message.version === 'string' ? message.version : null;
-        ws.send(JSON.stringify({ type: 'ready', version: '0.3.0' }));
+        ws.send(JSON.stringify({ type: 'ready', version: '0.4.0' }));
         return;
       }
+      if (message.type === 'permission_event') { Promise.resolve(handlers.permission?.(message.event)).catch(() => {}); return; }
       if (message.type === 'ping') { ws.send(JSON.stringify({ type: 'pong' })); return; }
       if (message.type === 'ui_request') {
         Promise.resolve().then(() => handlers.ui?.(message.action, message.args || {}) ?? Promise.reject(new Error('Chat is unavailable: restart the local bridge')))

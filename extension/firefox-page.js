@@ -31,7 +31,8 @@ export async function firefoxPageCommand(action, args) {
       el.dispatchEvent(new Event('change', { bubbles: true }));
     };
     let value;
-    if (action === 'viewport') value = { width: innerWidth, height: innerHeight, devicePixelRatio, scrollX, scrollY };
+    if (action === 'destination') { const el = resolve(args); value = el.closest?.('a[href]')?.href || (el.form && (el.type === 'submit' || el.tagName === 'BUTTON') ? el.form.action : null); }
+    else if (action === 'viewport') value = { width: innerWidth, height: innerHeight, devicePixelRatio, scrollX, scrollY };
     else if (action === 'snapshot') {
       state.refs.clear();
       const elements = all('a,button,input,textarea,select,[contenteditable],[role],h1,h2,h3,h4,h5,h6');

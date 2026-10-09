@@ -1,200 +1,64 @@
 # Codex Browser Bridge
 
-<img src="extension/assets/avatar-128.png" width="96" alt="Аватар Codex Browser Bridge">
+<img src="extension/assets/avatar-128.png" width="96" alt="Codex Browser Bridge avatar">
 
-Локальный MCP-сервер и расширения Chromium и Firefox, позволяющие Codex работать с
-вкладками **вашего обычного браузера**, включая текущие авторизованные сессии.
-В Chromium используется `chrome.debugger`, в Firefox — отдельный DOM backend.
-Для пользовательского профиля не нужен remote-debugging port.
+[Русская документация](README.ru.md)
 
-## Новое в 0.3.0
+A local MCP server and Chromium/Firefox extensions that let Codex work with tabs in **your regular browser**, including signed-in sessions. Chromium uses `chrome.debugger`; Firefox uses a separate DOM backend. No remote debugging port is needed for your browser profile.
 
-- Отдельная сборка Firefox с боковой панелью и автоматизацией страниц.
-- Карточка модели и тарифа, остаток лимитов за каждое окно, время сброса.
-  Данные приходят из [Codex app-server](https://learn.chatgpt.com/docs/app-server):
-  `config/read`, `account/read`, `account/rateLimits/read` и обновления лимитов.
-  Для запущенной задачи показывается модель из ответа `thread/start` / `thread/resume`,
-  включая последующее `model/rerouted`. До запуска показывается модель в настройках.
-  Отсутствующие лимиты обозначаются как недоступные; количество запросов не угадывается.
-- Новый интерфейс чата, popup и настроек: карточки, мягкие градиенты,
-  анимированный аватар, орбиты и индикатор активности во время работы.
-- План, число завершённых этапов, прошедшее время, понятные названия действий,
-  быстрые подсказки и отправка через Ctrl/⌘ + Enter. Прогресс считается по плану,
-  анимация прекращается при завершении/ошибке/остановке; учитывается reduced motion.
+**Responsibility notice:** an agent can change data and perform actions using your signed-in accounts. You are responsible for the tasks you authorize and for reviewing their results. The project is provided without warranties; to the extent permitted by applicable law, its authors and contributors accept no liability for agent actions or their consequences. See [Disclaimer](DISCLAIMER.md) and [MIT License](LICENSE).
 
-## Возможности 0.2.0
+## What's new in 0.4.0
 
-- Рабочая вкладка автоматически получает фиолетовую группу **Codex**,
-  индикатор `AI` на значке расширения и обозначение на странице.
-- Кнопка **Чат Codex** на HTTP(S)-страницах открывает боковую панель.
-  Чат также открывается через popup расширения.
-- Из чата можно передать задачу текущей вкладке, видеть план и сообщения,
-  отправлять уточнения во время работы и остановить выполнение.
-- **Передать управление до завершения задачи** включает цель Codex:
-  незавершённые этапы продолжаются, результат и уведомление приходят после окончания.
-  Ошибка, остановка, блокировка и исчерпание лимита показываются отдельно от успеха.
-- **Доработка расширения** разрешает Codex изменить исходники проекта,
-  сохраняет checkpoint, проверяет изменения и применяет обновление после окончания задачи.
-- Аватар используется в значке, кнопке, чате и уведомлениях.
+- Persistent domain restrictions: ask before access, or block completely. Common mail, banking, payments, government services, messaging, personal files and password-manager domains require consent by default.
+- Permission cards in the chat, popup and settings. Only the user can approve them; MCP can inspect, request or strengthen restrictions. Autonomous tasks pause while waiting and resume after consent. Refusal stops the task with a blocked result.
+- One Codex working group per browser window, buttons to merge, collapse or dissolve the group while keeping its tabs open.
+- Automatic cleanup of agent-created temporary tabs, with a **Keep** button. Existing user tabs, the main task tab, pinned tabs and manually regrouped tabs are preserved.
 
-### Обновление установленного расширения
+Previous releases added Firefox, model and quota cards, an animated activity display, page-launched chat, task handoff, a project avatar and extension development mode.
 
-После изменения исходников нажмите кнопку обновления на карточке в
-`chrome://extensions` / `brave://extensions`. Включите расширение снова,
-если браузер запросит новые разрешения. Убедитесь, что показана версия **0.3.0**.
-Ключ подключения сохраняется. Новые MCP-инструменты появляются после перезапуска MCP/клиента Codex.
+## Install
 
-### Чат и передача управления
-
-Нужен установленный Codex CLI с действующим входом в аккаунт (`codex login`).
-Чат использует локальный [Codex app-server](https://learn.chatgpt.com/docs/app-server)
-и настройки модели вашего Codex, не требует отдельного API-ключа.
-Это отдельный разговор Codex с сохранением контекста для той же вкладки и режима.
-К существующему разговору в настольном клиенте сообщения не добавляются.
-
-1. Откройте нужную HTTP(S)-страницу и нажмите **Чат Codex**.
-2. Проверьте название рабочей вкладки в панели.
-3. Введите задачу, например: «Пройди тестирование на этой странице,
-   проверь каждый этап и сообщи результат».
-4. Нажмите **Передать задачу**. План и сообщения появятся в панели.
-
-Задача закреплена за `tabId`; переключение вкладок человеком не переносит работу
-на другую страницу. Кнопка **Использовать открытую вкладку** меняет цель перед
-новой задачей. Одновременно выполняется одна задача чата; во время выполнения
-новое сообщение уточняет текущую задачу. История доступна в панели и сохраняется
-локально в `.local/tasks.json`, включая тексты заданий и ответов.
-После перезапуска моста незавершённая задача помечается остановленной и сама
-не возобновляется. Новая задача для той же вкладки продолжает предыдущий разговор.
-
-При передаче управления используется [цель Codex](https://learn.chatgpt.com/docs/app-server#manage-a-thread-goal).
-Работа продолжается до подтверждённого выполнения, реального препятствия,
-остановки пользователем или лимита **30 минут / 20 ходов**. Системы входа,
-недостающие данные и внешние ошибки могут потребовать вашего участия;
-такой результат не отмечается успешным.
-Уведомление об окончании появляется через систему уведомлений браузера.
-
-Браузерные задачи запускаются с read-only sandbox для локальных файлов;
-в режиме доработок разрешена запись в рабочую папку проекта. Браузерные действия
-выполняются по переданному заданию. Страница сама не может отправлять задания:
-content script обслуживает только открытие панели и индикатор, а сообщения задач
-принимаются только от собственных страниц расширения. Текст ответов выводится
-через `textContent`, без выполнения HTML со страницы или модели.
-
-### Режим доработок
-
-Выберите **Доработка расширения** в чате и опишите недостающую возможность.
-Перед запуском сохраняется копия исходников в `.local/checkpoints/<id>/`.
-Codex может добавить обработчик в код и проверить его следующими инструментами:
-
-| Инструмент | Возможности |
-|---|---|
-| `browser_extension_command` | `capabilities`, `invoke` для перечисленных Chrome API, `reload` |
-| `browser_development` | `status`, `checkpoint`, `validate`, `apply`, `rollback` |
-| `browser_workspace` | Пометить, освободить и проверить рабочие вкладки |
-| `browser_task` | История и состояние задач, запуск, уточнение, остановка |
-
-`validate` запускает проверки синтаксиса и автоматические тесты. `apply` доступен
-только после успешной проверки текущих исходников: любое изменение после проверки
-делает её устаревшей. После успешного завершения задачи обновление перезагружает
-расширение и перезапускает мост. Проверка на реальной странице выполняется
-отдельно через браузерные инструменты/`npm run test:browser`.
-`rollback` восстанавливает контрольную копию; для предыдущего обновления можно
-передать `checkpointId` из записи задачи. После отката снова нужны проверка и применение.
-Ключи, `.git`, `node_modules` и пользовательские данные в checkpoint не включаются.
-
-Произвольный JavaScript внутри расширения не исполняется через команды MCP:
-это несовместимо с подходом MV3. Новые способности добавляются как обработчики
-в исходники и применяются через перезагрузку. Для выполнения JavaScript самой
-страницы остаётся `browser_evaluate`; для расширенных команд вкладки — `browser_cdp`.
-
-```text
-Codex ── MCP / stdio ── server/mcp.js
-                            │ HTTP + ключ, только loopback
-                       server/daemon.js
-                            │ WebSocket + ключ
-                       расширение MV3
-                            │ chrome.debugger / DevTools Protocol
-                       вкладки браузера
-```
-
-## Firefox
+Requires Node.js 22+, Codex CLI signed in with `codex login`, and Chromium 120+ or Firefox Desktop 142+.
 
 ```bash
 npm ci
 npm run setup
+```
+
+Setup creates a private key in `.local/connection.json`, registers `browser_bridge` with Codex and starts the loopback bridge on `127.0.0.1:17863`. The key is not printed. `.local/`, logs, screenshots and packages are excluded from Git. Setup is repeatable and retains the key.
+
+### Chromium, Brave and Edge
+
+1. Open `chrome://extensions`, `brave://extensions` or `edge://extensions` and enable Developer mode.
+2. Load the unpacked `extension` folder.
+3. Open the extension's settings and import `.local/connection.json`. On Linux, Ctrl+H shows hidden folders in the file picker.
+4. Wait for **Connected**. Restart the MCP client or Codex session to discover `browser_*` tools.
+
+### Firefox
+
+```bash
 npm run package
 ```
 
-Откройте `about:debugging#/runtime/this-firefox`, нажмите **Загрузить временное дополнение**
-и выберите `dist/firefox/manifest.json`. В настройках дополнения импортируйте
-`.local/connection.json`. Кнопка на странице и popup открывают Firefox sidebar.
-Временное дополнение нужно загружать заново после перезапуска Firefox;
-постоянная установка требует подписи Mozilla. Подписанный XPI пока не выпускается.
+Open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and select `dist/firefox/manifest.json`. Import `.local/connection.json` in the add-on's settings. The page launcher and popup open the Firefox sidebar.
 
-Один локальный мост подключает один браузер: перед переключением отключите
-управление в расширении другого браузера. Проверить backend и возможности можно
-через `browser_status` или `browser_extension_command` → `capabilities`.
+Temporary add-ons must be loaded again after restarting Firefox. Permanent installation requires Mozilla signing; this project does not currently distribute a signed XPI. One bridge connects one browser at a time: disconnect the other browser's extension before switching.
 
-| Возможность | Chromium | Firefox |
-| --- | --- | --- |
-| Чат, модели, лимиты, передача задач | Да | Да |
-| Вкладки, навигация, поля, select, клавиатура, прокрутка | Да | Да |
-| HTML5 и pointer drag | Доверенные события | DOM-события |
-| Snapshot | Дерево доступности | DOM с ролями и refs |
-| Screenshot | Viewport и full-page | Viewport нужной вкладки |
-| JavaScript страницы | CDP | MAIN execution world |
-| Группа рабочей вкладки | Да | При наличии API; иначе значок AI и индикатор страницы |
-| Trusted input, CDP, нативные диалоги, upload, console/network | Да | Недоступны |
+### Updating
 
-Firefox использует синтетические DOM-события (`isTrusted=false`): страницы, которые
-требуют доверенный ввод, могут их отвергать. Неподдерживаемые команды возвращают
-явную ошибку. Селекторы поддерживают открытые shadow roots в основном документе.
-Для скриншотов Firefox требует `<all_urls>`; выполнение команд всё равно ограничено HTTP(S).
-API и форматы сборки описаны в официальной документации
-[background modules](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background),
-[sidebarAction](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/sidebarAction/open)
-и [captureTab](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs/captureTab).
+Reload the extension after updating its files. Accept the new browser permissions if prompted, and verify version **0.4.0**. The connection key and saved access rules are retained. Restart the local bridge to load server changes, and restart the Codex MCP client to discover new tools. For Firefox, rebuild and reload the add-on from `dist/firefox`.
 
-`npm run test:firefox` запускает настоящий headless Firefox во временном профиле,
-с отдельным портом и ключом; пользовательские окна и параметры не меняются.
-`npm run lint:firefox` проверяет собранную папку Mozilla web-ext.
-
-## Установка
-
-Требуются Node.js 22+ и Chrome/Chromium 120+ с поддержкой расширений MV3.
-Для Edge используется `edge://extensions`. Firefox Desktop 142+ использует отдельную сборку ниже.
-
-```bash
-npm ci
-npm run setup
-```
-
-Команда создаёт индивидуальный ключ в `.local/connection.json`, регистрирует MCP
-`browser_bridge` в настройках Codex и запускает локальный мост на `127.0.0.1:17863`.
-Ключ не выводится в терминал. `.local/`, логи и скриншоты исключены из Git.
-Команду можно запускать повторно: ключ сохраняется, регистрация обновляется.
-
-1. Откройте `chrome://extensions`, включите **Режим разработчика**.
-2. Нажмите **Загрузить распакованное расширение** и выберите папку `extension` этого проекта.
-3. Откройте **Настройки** расширения через его значок.
-4. Импортируйте `.local/connection.json`. В файловом диалоге Linux скрытые папки показывает `Ctrl+H`.
-5. Дождитесь статуса **Подключено**.
-6. Перезагрузите MCP в Codex или перезапустите клиент/новую сессию, чтобы появились инструменты `browser_*`.
-
-Проверка:
+Verify your setup:
 
 ```bash
 codex mcp get browser_bridge
 npm run status
 ```
 
-Настройка без установленного Codex CLI: `npm run setup -- --no-codex`.
-Другой порт при первом запуске: `npm run setup -- --port 17865`.
-Существующую конфигурацию команда не перезаписывает; менять порт в её `port` и `url`
-нужно при остановленном мосте и затем повторно импортировать файл в расширение.
-Переменная `BROWSER_BRIDGE_CONFIG` позволяет выбрать другой путь конфигурации.
+Use `npm run setup -- --no-codex` to configure the bridge without registering Codex, or `--port 17865` for a different port on first setup. Existing configuration is not overwritten. `BROWSER_BRIDGE_CONFIG` selects another configuration file. To change an existing port, stop the bridge, edit both `port` and `url`, and import the file again.
 
-При ручном подключении в `~/.codex/config.toml` используйте абсолютные пути:
+Manual Codex configuration uses absolute paths:
 
 ```toml
 [mcp_servers.browser_bridge]
@@ -207,158 +71,128 @@ tool_timeout_sec = 240
 BROWSER_BRIDGE_CONFIG = "/absolute/path/to/project/.local/connection.json"
 ```
 
-Команда `npm run setup` автоматически использует фактический абсолютный путь Node.js.
-Этот способ регистрации соответствует [официальной документации Codex MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
+Setup uses the actual absolute Node executable path. See [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
 
-## Инструменты
+## Access rules and consent
 
-31 инструмент MCP:
+Settings include a domain rule editor. Rules apply to the domain and its subdomains, match host names rather than text in URLs, and persist across browser restarts. **Ask** requires approval; **Block** prevents access until you change the rule in settings. Removing a rule restores ordinary access unless a parent-domain rule still applies.
 
-| Задача | Инструменты |
-|---|---|
-| Соединение и вкладки | `browser_status`, `browser_tabs`, `browser_new_tab`, `browser_activate_tab`, `browser_close_tab` |
-| Навигация | `browser_navigate`, `browser_history` |
-| Просмотр | `browser_screenshot`, `browser_snapshot` |
-| Мышь | `browser_click`, `browser_hover`, `browser_drag`, `browser_mouse`, `browser_scroll` |
-| Формы и клавиатура | `browser_fill`, `browser_type`, `browser_press_key`, `browser_select`, `browser_upload` |
-| Ожидание и диалоги | `browser_wait`, `browser_dialog` |
-| Диагностика | `browser_evaluate`, `browser_console`, `browser_network`, `browser_downloads` |
-| Расширенные действия | `browser_cdp`, `browser_detach` |
-| Чат и доработки | `browser_workspace`, `browser_task`, `browser_extension_command`, `browser_development` |
+In extension chat you can write **«Сюда без моего разрешения не ходи»** for the selected tab, or **«Не открывай example.com без разрешения»**. Short recognized restriction commands are saved directly without starting an agent. More complex instructions can be handled by Codex using `browser_policy` → `protect`.
 
-Рекомендуемый порядок: `browser_status` → `browser_tabs` → выбрать `tabId` →
-`browser_snapshot` или `browser_screenshot` → действие → проверка результата.
-Передавайте явный `tabId`, чтобы смена активной вкладки человеком не меняла цель.
+Protected tabs have their titles and URLs hidden from MCP tab listings until approved. Before a protected read, action or navigation, the extension shows the destination, reason and permission kind. Choose **Allow** or **Deny** in its own interface. Site content cannot issue decisions; MCP has no approval operation. External Codex conversations receive an approval-required error and must wait; the built-in chat also pauses its autonomous task automatically.
 
-### Скриншоты и элементы
+An approval applies to the **exact host**, not all subdomains, for at most **15 minutes**. Approvals issued during a chat task belong to that task; approvals issued outside a task belong to the current manual browser-control session. Task grants are revoked at completion; disconnecting or releasing all work revokes grants and pending requests. A declined request is not asked repeatedly in the same scope. Editing a domain rule revokes its prior grants.
 
-Скриншот возвращается как MCP image content и доступен модели для просмотра.
-Текст рядом с изображением содержит размеры viewport, `devicePixelRatio`, прокрутку
-и систему координат. Клики используют **CSS-пиксели viewport**. Для координат
-изображения делите их на `devicePixelRatio`; для полного скриншота страницы
-дополнительно вычитайте текущие `scrollX` / `scrollY`.
-Полные скриншоты ограничены 32 миллионами пикселей.
+`browser_evaluate` and raw `browser_cdp` require an additional **JavaScript / CDP** approval, even on ordinary sites. This consent does not remove domain restrictions. Raw CDP is restricted to an allowlist; arbitrary target creation and unrestricted extension code execution are disabled. Named extension navigation APIs use the same access checks.
 
-`browser_snapshot` возвращает дерево доступности с ролями, именами и ссылками
-вроде `b42`. Ссылки адресуют DOM backend node и пригодны для взаимодействий;
-после навигации нужно получить новые. Значения текстовых и парольных полей
-не включаются в дерево. Текст страницы и имена элементов остаются видимыми.
+The extension installs session network rules on controlled tabs before navigation, blocking protected top-level requests, frames and common resource requests, including HTTP redirects. These rules are removed when control is released; they do not restrict your ordinary browsing in unrelated tabs. Chromium and Firefox require the new `declarativeNetRequestWithHostAccess` and `webNavigation` permissions for this feature.
 
-CSS-селектор должен соответствовать ровно одному элементу. Клики, заполнение,
-выбор, hover, загрузка файлов и drag ищут также в открытых Shadow DOM.
-`browser_wait` ищет селекторы в главном документе.
-Высокоуровневые инструменты не разрешают селекторы внутри iframe автоматически;
-для iframe используйте координаты viewport или `browser_cdp` с frame/session IDs.
+**Limits:** this is an access guard, not a complete browser or operating-system sandbox. The default domain list is not exhaustive. Already loaded data, cached content, arbitrary page scripts, service workers, popup-creation timing and approved JavaScript/CDP actions have limits beyond this mechanism. A site approval authorizes access, not a separate confirmation for every purchase, message, deletion or other action; describe those boundaries in your task. Local source changes and development mode can change the guard itself, so review such changes. See [Responsibility notice](DISCLAIMER.md).
 
-`browser_fill` заменяет значение через native setter и события `input/change`.
-`browser_type` и `browser_press_key` используют доверенный ввод браузера.
-Мышь и оба вида drag используют DevTools Input. Для drag оба конца должны
-помещаться в viewport после прокрутки к исходному элементу; для длинных жестов
-используйте `browser_mouse` и `browser_scroll` поэтапно.
+## Chat and autonomous tasks
 
-### Дополнительные возможности через CDP
+The **Chat Codex** button on HTTP(S) pages opens the extension panel. Chat uses your local [Codex app-server](https://learn.chatgpt.com/docs/app-server) and existing Codex login/configuration; no separate API key is required. It is a separate conversation, not an existing desktop-client thread.
 
-`browser_cdp` открывает команды доменов, которые разрешены `chrome.debugger`:
-DOM, Runtime, Page, Input, Network, Emulation, Storage и другие.
-Доступны эмуляция размера viewport, PDF, работа с frame targets и другие сценарии,
-в пределах [ограничений Chrome debugger API](https://developer.chrome.com/docs/extensions/reference/api/debugger).
-Это не управление всем рабочим столом: расширение не нажимает системные окна,
-адресную строку, меню браузера и файловые диалоги ОС. Файлы задаются через
-`browser_upload` с абсолютными путями **на машине браузера**.
+1. Open the page and launch chat.
+2. Check the selected target tab.
+3. Describe the task, for example: “Complete every stage of this test and report the results.”
+4. Enable handoff until completion if needed, and send the task.
 
-Консоль и метаданные сети собираются с момента первого подключения debugger
-к вкладке, максимум 300 событий каждого вида. Тела запросов и cookies не
-собираются автоматически. Для проверки сеть нужно подключить до нужного действия.
+The target is bound to `tabId`; switching tabs yourself does not move the task. A new message while running steers the current task. You can stop it, follow its plan, read messages and inspect action progress. One chat task runs at a time. History is stored locally in `.local/tasks.json`; a new task for the same tab and mode resumes its previous conversation. After a bridge restart, incomplete tasks are marked interrupted and do not resume automatically.
 
-## Тестирование
+Handoff uses a [Codex thread goal](https://learn.chatgpt.com/docs/app-server#manage-a-thread-goal), continuing until verified completion, a real blocker, user cancellation or the **30-minute / 20-turn** limit. Waiting for access consent is shown separately. Browser notifications report the result; failures and blocked tasks are not reported as success.
+
+The model card reports the configured model before a task, and the resolved or rerouted model while running. Quotas come from `account/rateLimits/read` and updates: remaining percentages and reset times are shown for each available window, without guessing request counts. Unavailable quota data is explicitly marked. The avatar and progress display animate only during work and respect reduced-motion preferences.
+
+## Groups and temporary tabs
+
+Working tabs share one purple **Codex** group per window, an `AI` badge and a page indicator. Group controls merge work tabs, collapse the group, dissolve the work group without closing tabs, or clean up temporary tabs. Existing original groups are restored where possible; manual regrouping is respected.
+
+Tabs created by `browser_new_tab` are temporary by default. Pass `temporary: false`, use `browser_workspace` → `keep`, or click **Keep** in chat to preserve a result tab. Cleanup only closes tabs recorded as created by this extension, excluding the main task tab, pinned tabs and manually regrouped tabs. Finishing a task cleans its temporary tabs and releases its work markers. Firefox uses native groups when its APIs are available, otherwise the badge and page indicator remain available.
+
+## Extension development mode
+
+Choose extension development mode in chat to ask Codex to update this project. The bridge saves a checkpoint, validates source syntax/manifests and tests, and can apply a reload/restart after the task finishes. `browser_development` also exposes inspection, validation, application and rollback. Browser tasks use a read-only local-files sandbox; development tasks allow writes to the project workspace.
+
+New abilities are added as source handlers and applied by reloading. MCP cannot run arbitrary JavaScript inside the extension. `browser_extension_command` exposes only named, allowlisted browser APIs. Connection keys, browser storage and arbitrary script injection are not exposed through that API.
+
+## MCP tools
+
+32 tools:
+
+| Purpose | Tools |
+| --- | --- |
+| Connection and tabs | `browser_status`, `browser_tabs`, `browser_new_tab`, `browser_activate_tab`, `browser_close_tab` |
+| Navigation | `browser_navigate`, `browser_history` |
+| Observation | `browser_screenshot`, `browser_snapshot` |
+| Mouse | `browser_click`, `browser_hover`, `browser_drag`, `browser_mouse`, `browser_scroll` |
+| Forms and keyboard | `browser_fill`, `browser_type`, `browser_press_key`, `browser_select`, `browser_upload` |
+| Waiting and dialogs | `browser_wait`, `browser_dialog` |
+| Diagnostics | `browser_evaluate`, `browser_console`, `browser_network`, `browser_downloads` |
+| Advanced actions | `browser_cdp`, `browser_detach` |
+| Policy, chat and development | `browser_policy`, `browser_workspace`, `browser_task`, `browser_extension_command`, `browser_development` |
+
+Recommended flow: status → tabs → explicit `tabId` → snapshot/screenshot → action → verification. Never work around an approval-required or denied result.
+
+Screenshots return MCP image content plus viewport size, pixel ratio and scroll position. Clicks use viewport CSS pixels: divide screenshot coordinates by `devicePixelRatio`, and subtract scroll offsets for full-page screenshots. Full-page images are limited to 32 million pixels.
+
+Chromium snapshots provide accessibility roles, names and refs such as `b42`; Firefox provides DOM roles and refs. References must be refreshed after navigation. Text/password field values are excluded from snapshots; page text and accessible names remain visible. CSS selectors must match exactly one element and support open shadow roots. High-level selectors do not automatically address iframe contents.
+
+| Capability | Chromium | Firefox |
+| --- | --- | --- |
+| Chat, tasks, model and quotas, access rules | Yes | Yes |
+| Tabs, forms, keyboard, scrolling | Yes | Yes |
+| Drag | Trusted events | DOM events |
+| Screenshot | Viewport/full page | Tab viewport |
+| Page JavaScript | CDP | MAIN execution world |
+| Tab groups | Yes | When APIs are available |
+| Trusted input, native dialogs, uploads, console/network, raw CDP | Yes | Unavailable |
+
+Firefox synthetic events have `isTrusted=false` and may be rejected by some sites. Unsupported operations return explicit errors. Chromium console/network collection begins at debugger attachment and retains up to 300 events per kind; request bodies and cookies are not collected automatically. File upload uses absolute paths on the browser's machine. Neither backend controls OS dialogs, browser menus or the address bar.
+
+## Testing and packages
 
 ```bash
 npm run check
 npm test
-```
-
-Автоматические тесты проверяют настоящий stdio MCP transport, объявления
-инструментов, JSON и image content, обмен с имитатором расширения, проверку
-ключа, запрет сайтов/подмены Host, параллельные запросы, отключение и таймауты.
-Тесты автоматизации с mock Chrome API проверяют ввод, очередь, обработку модальных
-диалогов и очистку remote objects. Они не подтверждают работу в реальном браузере.
-
-**После установки расширения**:
-
-```bash
-npm run test:browser
-```
-
-Проверка автономного выполнения задания настоящим Codex (использует ваш вход
-и текущую модель): `npm run test:handoff`. Тест поручает Codex заполнить форму,
-нажать кнопку, выбрать опцию и проверить результаты; затем отдельно проверяет
-состояние страницы и успешное завершение цели. Отчёт: `.local/handoff-results.json`.
-
-Тест запускает локальную страницу на `127.0.0.1:17864` и открывает собственную
-вкладку. Он проверяет заполнение по AX ref, доверенный клик, Unicode-ввод,
-клавиатурные сокращения, checkbox/select, Shadow DOM, HTML5 и pointer drag,
-upload, confirm, консоль/сеть, ожидание/прокрутку, viewport/full-page скриншоты,
-CDP и навигацию назад/вперёд/перезагрузку. По окончании тестовая вкладка закрывается.
-Для upload браузер и тестовый сервер должны видеть одну файловую систему.
-Артефакты: `.local/smoke-results.json`, `.local/smoke-viewport.png`,
-`.local/smoke-full-page.png`. Проверьте скриншоты встроенным просмотрщиком изображений.
-
-Для ручной проверки страницы: `npm run fixture`.
-CI запускает протокольные тесты на Node.js 22 и 24; пользовательский профиль браузера в CI не используется.
-
-## Управление соединением
-
-Мост запускается автоматически при первом MCP-запросе и живёт отдельно от
-сессий Codex. Несколько MCP-клиентов используют одно соединение расширения;
-браузерные действия выполняются по очереди. Управление диалогами обходит очередь,
-чтобы можно было закрыть модальное окно, блокирующее текущую команду.
-Команды, срок ожидания которых истёк в очереди, не начинают выполняться.
-
-Кнопка **Отключить** в расширении закрывает соединение и снимает debugger
-с управляемых вкладок. Она также отменяет ещё не начатые действия.
-Уже выполнявшееся действие могло успеть изменить страницу.
-При обрыве соединения или таймауте сначала проверьте результат перед повтором.
-
-Для запуска моста в терминале: `npm run bridge`. Если автоматически запущенный
-мост уже занял порт, второй процесс не запускается. Для полной остановки
-найдите PID командой `lsof -iTCP:17863 -sTCP:LISTEN` и отправьте ему `SIGTERM`.
-При следующем вызове MCP процесс снова запустится.
-Лог: `.local/bridge.log`. На старте браузера расширение подключается повторно;
-WebSocket keepalive использует [официальный механизм MV3](https://developer.chrome.com/docs/extensions/how-to/web-platform/websockets).
-
-Если браузер на другой машине, используйте SSH-туннель с машины браузера:
-
-```bash
-ssh -N -L 17863:127.0.0.1:17863 user@codex-host
-```
-
-Для smoke-тестов нужен также `-L 17864:127.0.0.1:17864`. Передайте файл подключения
-на машину браузера; сервер продолжает слушать только loopback. Для upload файл
-должен отдельно существовать на машине браузера.
-
-## Устранение неполадок
-
-- **Нет подключения:** `npm run status`; проверьте, что импортирован файл именно
-  этого проекта и порт совпадает. Только один экземпляр расширения может подключиться к мосту.
-- **Нет MCP-инструментов:** проверьте `codex mcp get browser_bridge`, перезапустите
-  MCP/клиент. Обновление конфигурации не добавляет инструменты в уже запущенную сессию автоматически.
-- **Cannot attach:** закройте DevTools вкладки. Chrome показывает штатную полосу
-  уведомления об управлении через debugger. Её закрытие может снять debugger.
-- **Служебные страницы:** `chrome://`, магазин расширений и некоторые внутренние
-  страницы недоступны. Откройте обычный HTTP(S)-сайт.
-- **Element is stale:** обновите snapshot; для координат заново проверьте screenshot.
-- **Секреты:** не публикуйте `.local/connection.json`; любой владелец ключа с доступом
-  к локальному мосту получает управление подключённым браузером. Команды от сайтов
-  запрещены по Origin, HTTP Host проверяется, bearer key обязателен.
-
-## Подготовка к GitHub
-
-```bash
 npm run package
+npm run lint:firefox
 ```
 
-Архив `dist/codex-browser-bridge-extension.zip` содержит только расширение.
-Для установки распакуйте архив и выберите полученную папку в `chrome://extensions`.
-MCP-сервер устанавливается из репозитория отдельно. `package-lock.json`, исходники,
-README, MIT license и GitHub Actions включаются в репозиторий; ключи/артефакты — нет.
-Публикацию выполняйте после успешных тестов установленного расширения.
+Unit/protocol tests cover real stdio MCP transport, schemas, image output, authentication, origins/Host, timeouts, serial actions, modal dialogs, access policy, consent pause/resume and safe cleanup. Browser tests run real automation:
+
+```bash
+npm run test:isolated    # Temporary Chromium profile; set CHROMIUM_BIN if needed
+npm run test:firefox     # Temporary Firefox profile; set FIREFOX_BIN if needed
+```
+
+The isolated suites use separate ports, keys and temporary add-ons. They simulate user consent only for local fixtures, exercise the production permission UI, and verify that blocked redirects never reach the protected test server. They do not grant permissions in your installed extension.
+
+`npm run test:browser` tests the installed Chromium extension and needs your JavaScript/CDP consent for the local fixture. `npm run test:handoff` starts a real Codex task using your login and model, and needs the corresponding local diagnostic consent for verification. These tests create their own fixture tabs and close them afterward. `npm run fixture` starts the page for manual testing. Results/screenshots are stored under `.local/`; inspect images with the built-in image viewer. CI runs checks, unit tests, packaging and Firefox lint on Node 22 and 24.
+
+Packages are `dist/codex-browser-bridge-extension.zip` and `dist/codex-browser-bridge-firefox.zip`; install the MCP server separately from this repository. Connection keys and test artifacts are never packaged.
+
+## Connection and troubleshooting
+
+```text
+Codex → MCP / stdio → server/mcp.js
+                           ↓ authenticated loopback HTTP
+                      server/daemon.js
+                           ↓ authenticated WebSocket
+                      browser extension → controlled tabs
+```
+
+The bridge starts automatically on the first MCP request and survives individual client sessions. Browser gestures are serialized; modal-dialog handling can bypass the queue to unblock an action. Expired queued commands do not start. Disconnecting releases debugging, work groups and access grants and cancels unstarted commands. An action already in progress may have changed the page: inspect before retrying after a timeout or disconnect.
+
+Use `npm run bridge` for foreground operation. To stop an existing bridge, find its PID with `lsof -iTCP:17863 -sTCP:LISTEN` and send `SIGTERM`. The next MCP request starts it again. Logs are in `.local/bridge.log`.
+
+- **No connection:** run `npm run status`, check the imported key/port, and disconnect any other extension using this bridge.
+- **No tools:** check `codex mcp get browser_bridge` and restart the MCP client.
+- **Cannot attach:** close the tab's DevTools. Dismissing Chromium's debugger-control notification can detach automation.
+- **Approval required:** open extension chat, popup or settings and decide the pending request. Never bypass it with another tool.
+- **Access guard unavailable:** reload the updated extension and accept its new browser permissions.
+- **Internal pages:** `chrome://`, extension stores and other restricted browser pages are unavailable; use HTTP(S).
+- **Stale element:** refresh the snapshot or screenshot.
+- **Secrets:** never publish `.local/connection.json`. Anyone with its key and access to the bridge can control the connected browser, subject to extension policy. Website origins are rejected, HTTP Host is validated, and authentication is mandatory.
+
+For a browser on another machine, forward the bridge from that machine with `ssh -N -L 17863:127.0.0.1:17863 user@codex-host`, securely transfer the connection file and ensure upload files exist there. Installed-browser smoke tests also need port 17864 forwarded.

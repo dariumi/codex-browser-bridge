@@ -87,3 +87,17 @@ Mozilla `web-ext` — только dev-зависимость. В установ
 для транзитивного `node-forge` через Android adbkit (для Firefox Desktop не используется);
 исправленной версии node-forge в npm на момент проверки нет. `shell-quote` обновлён
 override до исправленной версии. Runtime-зависимости проверяются отдельно.
+
+## Update 0.4.0
+
+Date: 2026-10-10. Node.js 24.12.0; real Chromium/Brave and Firefox in isolated temporary profiles, plus the installed Brave extension.
+
+- `npm run check`: JavaScript and both manifests pass.
+- `npm test`: 43 tests pass, including host matching, subdomains/IDN, scoped/expiring consent, refusal, advanced consent, frame and named-API checks, queue-time rechecks, permission pause/resume, fast approval races, group preservation and temporary-only cleanup.
+- `npm run test:isolated`: 14 existing Chromium automation groups and four access/workspace checks pass through real stdio MCP and a temporary extension. Consent is simulated only on loopback fixtures using the production permission-card UI. Protected HTTP redirects are blocked before the test server receives a request.
+- `npm run test:firefox`: seven existing Firefox automation groups and the same four access/workspace checks pass through real stdio MCP and a temporary add-on.
+- The installed bridge and Brave extension were reloaded to 0.4.0. The network guard, default rules, local form fill/click/snapshot and temporary-tab cleanup were checked without granting advanced or sensitive-site access.
+- The permission card and paused state were previewed at 420px with Playwright and inspected using the built-in image viewer; the deny button removes the card. This visual preview uses mock task/account state; real site consent was tested separately in both isolated browsers.
+- `npm run package`: both browser archives build. `npm run lint:firefox`: zero errors and the existing `DANGEROUS_EVAL` warning for explicitly approved page JavaScript.
+
+No public sensitive site was opened for testing. The new guard is not a complete security sandbox; its boundaries and the project responsibility notice are documented in both README versions and DISCLAIMER.md. Live Codex handoff with a real user's sensitive-site decision has not been run; pause/resume and interruption races are covered by TaskManager tests.

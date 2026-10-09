@@ -26,7 +26,7 @@ export class CodexAppServer extends EventEmitter {
       const item = this.pending.get(message.id);
       if (item) { clearTimeout(item.timer); this.pending.delete(message.id); message.error ? item.reject(new Error(message.error.message)) : item.resolve(message.result); }
     });
-    await this.request('initialize', { clientInfo: { name: 'codex_browser_bridge', title: 'Codex Browser Bridge', version: '0.3.0' } });
+    await this.request('initialize', { clientInfo: { name: 'codex_browser_bridge', title: 'Codex Browser Bridge', version: '0.4.0' } });
     this.send({ method: 'initialized', params: {} });
   }
   send(message) {
