@@ -45,6 +45,7 @@ export class CommandGuard {
       const tab = await this.target(args.tabId, 'workspace'); return this.workspace.mark(tab.id, args.label, args.taskId);
     }
     if (action === 'new_tab') {
+      if (!this.api.declarativeNetRequest) throw new Error('Access network guard is unavailable. Reload the extension and grant its new permissions.');
       await this.policy.ensure(args.url, action); validate();
       const tab = await this.api.tabs.create({ url: 'about:blank', active: args.active ?? true });
       try { await this.policy.track(tab.id); await this.workspace.register(tab.id, args.temporary !== false); validate();

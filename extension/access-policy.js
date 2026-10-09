@@ -73,7 +73,6 @@ export class AccessPolicy {
     if (allowed && request.kind === 'site' && this.rule(request.host)?.mode === 'deny') throw new Error('Site is blocked. Change the rule in settings first.');
     request.status = allowed ? 'allowed' : 'denied'; request.decidedAt = new Date().toISOString();
     if (allowed) this.grants.push({ host: request.host, kind: request.kind, scope: request.scope, expiresAt: Date.now() + 15 * 60 * 1000 });
-    if (allowed) this.api.alarms?.create('access_expiry', { when: Math.min(...this.grants.filter(g => g.expiresAt > Date.now()).map(g => g.expiresAt)) });
     await this.sync(); await this.persist(); this.event({ type: 'decision', allowed: !!allowed, request }); return this.state();
   }
   async track(tabId) { await this.ready; if (this.tabs.get(tabId) === (this.scope() || 'manual')) return; this.tabs.set(tabId, this.scope() || 'manual'); await this.sync(); await this.persist(); }
@@ -101,6 +100,9 @@ export class AccessPolicy {
         if (allowedTabs.length) addRules.push({ id: id++, priority: 5, action: { type: 'allow' }, condition: { regexFilter: `^https?://${escape(grant.host)}(:[0-9]+)?(/|$)`, tabIds: allowedTabs, resourceTypes: types } });
       }
       await this.api.declarativeNetRequest.updateSessionRules({ removeRuleIds, addRules });
+      const expirations = this.grants.filter(g => g.expiresAt > Date.now()).map(g => g.expiresAt);
+      if (expirations.length) this.api.alarms?.create('access_expiry', { when: Math.min(...expirations) });
+      else await this.api.alarms?.clear?.('access_expiry');
     });
     this.tail = operation.catch(() => {}); return operation;
   }

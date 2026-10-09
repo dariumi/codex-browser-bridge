@@ -30,8 +30,12 @@ test('permission approval is scoped, expires, preserves bans and generates per-t
   await assert.rejects(f.policy.ensure('https://sub.bank.example', 'click'), /APPROVAL_REQUIRED/);
   assert.equal(f.rules.find(r => r.action.type === 'allow').condition.tabIds[0], 7);
   assert.ok(f.rules.find(r => r.action.type === 'block').condition.resourceTypes.includes('main_frame'));
+  let alarm;
+  f.api.alarms = { create: (_name, options) => { alarm = options.when; } };
+  const laterExpiry = Date.now() + 60000;
+  f.policy.grants.push({ host: 'later.example', kind: 'site', scope: 'task-1', expiresAt: laterExpiry });
   f.policy.grants[0].expiresAt = Date.now() - 1; await f.policy.sync();
-  assert.equal(f.rules.some(r => r.action.type === 'allow'), false);
+  assert.equal(alarm, laterExpiry); assert.equal(f.rules.filter(r => r.action.type === 'allow').length, 1);
   await assert.rejects(f.policy.ensure('https://bank.example', 'click'), /APPROVAL_REQUIRED/);
   await f.policy.reset('task-1'); assert.equal(f.rules.length, 0);
 });
@@ -65,4 +69,12 @@ test('guard rechecks the current page inside the execution queue', async () => {
   const automation = { tab: async () => tab, run: async (_action, _args, validate) => { tab.url = 'https://bank.example'; await validate(); executed = true; } };
   const guard = new CommandGuard(f.api, automation, {}, f.policy);
   await assert.rejects(guard.run('snapshot', { tabId: 7 }), /ACCESS_DENIED/); assert.equal(executed, false);
+});
+
+test('new tabs fail closed before creation when the network guard is unavailable', async () => {
+  const f = fixture(); await f.policy.ready; delete f.api.declarativeNetRequest;
+  let created = false; f.api.tabs.create = async () => { created = true; };
+  const guard = new CommandGuard(f.api, {}, {}, f.policy);
+  await assert.rejects(guard.run('new_tab', { url: 'https://ordinary.example' }), /network guard is unavailable/);
+  assert.equal(created, false);
 });
