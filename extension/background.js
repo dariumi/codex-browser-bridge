@@ -1,9 +1,11 @@
+import { api as chrome, capabilities, openChat } from './platform.js';
+import { FirefoxAutomation } from './firefox-automation.js';
 import { BrowserAutomation } from './automation.js';
 import { BrowserWorkspace } from './workspace.js';
 import { extensionCommand } from './commands.js';
 
-const workspace = new BrowserWorkspace();
-const automation = new BrowserAutomation(chrome, workspace);
+const workspace = new BrowserWorkspace(chrome);
+const automation = chrome.debugger ? new BrowserAutomation(chrome, workspace) : new FirefoxAutomation(chrome, workspace);
 let socket = null, heartbeat = null, retry = null, generation = 0, authBlocked = false;
 let state = { connected: false, enabled: false, error: null };
 const uiPending = new Map();
@@ -46,7 +48,7 @@ async function connect() {
   socket = ws;
   ws.onopen = () => {
     if (epoch !== generation) { ws.close(); return; }
-    ws.send(JSON.stringify({ type: 'hello', token: settings.token, version: chrome.runtime.getManifest().version }));
+    ws.send(JSON.stringify({ type: 'hello', token: settings.token, version: chrome.runtime.getManifest().version, browser: capabilities(chrome).browser, capabilities: capabilities(chrome) }));
     heartbeat = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' })); }, 20000);
   };
   ws.onmessage = async ({ data }) => {
@@ -106,7 +108,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (sender.id !== chrome.runtime.id) return;
   if (message.type === 'open_chat' && sender.tab?.id) {
     chatTabId = sender.tab.id; chrome.storage.session.set({ chatTabId });
-    chrome.sidePanel.open({ tabId: sender.tab.id }).then(() => { broadcast({ type: 'chat_target', tabId: sender.tab.id }); respond({ ok: true }); }).catch((error) => respond({ error: error.message }));
+    openChat(sender.tab.id, chrome).then(() => { broadcast({ type: 'chat_target', tabId: sender.tab.id }); respond({ ok: true }); }).catch((error) => respond({ error: error.message }));
     return true;
   }
   if (message.type === 'page_ready' && sender.tab?.id) {
@@ -116,11 +118,12 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   // Content scripts cannot submit tasks or read chat, configuration, or connection keys.
   if (!sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({ error: 'Extension UI only' }); return; }
   (async () => {
-    if (message.type === 'status') return { ...state, version: chrome.runtime.getManifest().version, attachedTabs: [...automation.attached], workingTabs: [...workspace.work.values()], activeTaskId: tasksState.activeTaskId };
+    if (message.type === 'status') return { ...state, version: chrome.runtime.getManifest().version, attachedTabs: [...automation.attached], workingTabs: [...workspace.work.values()], activeTaskId: tasksState.activeTaskId, capabilities: capabilities(chrome) };
     if (message.type === 'chat_context') {
       const tab = await automation.tab(message.tabId || chatTabId);
       return { tabId: tab.id, title: tab.title, url: tab.url, connected: state.connected };
     }
+    if (message.type === 'chat_account') return uiRequest('account', { refresh: message.refresh === true });
     if (message.type === 'chat_tasks') { tasksState = await uiRequest('list'); return tasksState; }
     if (message.type === 'chat_start') {
       const tab = await automation.tab(message.tabId || chatTabId);
@@ -131,8 +134,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       return uiRequest(message.action, { taskId: message.taskId, text: message.text });
     }
     if (message.type === 'open_chat') {
+      const opening = chrome.sidebarAction ? openChat(null, chrome) : null;
       const tab = await automation.tab(); chatTabId = tab.id; await chrome.storage.session.set({ chatTabId });
-      await chrome.sidePanel.open({ tabId: tab.id }); return { ok: true };
+      await (opening || openChat(tab.id, chrome)); return { ok: true };
     }
     if (message.type === 'configure') {
       validate(message.settings);
@@ -150,8 +154,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   return true;
 });
 chrome.notifications.onClicked.addListener(async () => {
+  if (chrome.sidebarAction) { openChat(null, chrome).catch(() => {}); return; }
   const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (tabs[0]) chrome.sidePanel.open({ tabId: tabs[0].id }).catch(() => {});
+  if (tabs[0]) openChat(tabs[0].id, chrome).catch(() => {});
 });
 chrome.runtime.onInstalled.addListener(async () => {
   chrome.alarms.create('reconnect', { periodInMinutes: 0.5 }); connect();

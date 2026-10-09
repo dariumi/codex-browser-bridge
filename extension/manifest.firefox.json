@@ -3,12 +3,8 @@
   "name": "Codex Browser Bridge",
   "version": "0.3.0",
   "description": "Connect your existing browser tabs to your local Codex MCP server.",
-  "minimum_chrome_version": "120",
   "permissions": [
-    "debugger",
     "tabs",
-    "tabGroups",
-    "sidePanel",
     "storage",
     "alarms",
     "downloads",
@@ -16,8 +12,7 @@
     "scripting"
   ],
   "host_permissions": [
-    "http://*/*",
-    "https://*/*"
+    "<all_urls>"
   ],
   "icons": {
     "16": "assets/avatar-16.png",
@@ -26,7 +21,9 @@
     "128": "assets/avatar-128.png"
   },
   "background": {
-    "service_worker": "background.js",
+    "scripts": [
+      "background.js"
+    ],
     "type": "module"
   },
   "action": {
@@ -36,9 +33,6 @@
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
-  },
-  "side_panel": {
-    "default_path": "chat.html"
   },
   "content_scripts": [
     {
@@ -65,5 +59,21 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src ws://127.0.0.1:* ws://localhost:*"
+  },
+  "sidebar_action": {
+    "default_title": "Codex",
+    "default_panel": "chat.html",
+    "default_icon": "assets/avatar-32.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "codex-browser-bridge@dariumi",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
   }
 }

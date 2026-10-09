@@ -29,7 +29,7 @@ try {
     assert.ok((await json('tabs')).some((tab) => tab.tabId === tabId)); await call('activate_tab', { tabId });
   });
   await step('extension commands and working-tab group', async () => {
-    const info = await json('extension_command', { command: 'capabilities' }); assert.equal(info.version, '0.2.0');
+    const info = await json('extension_command', { command: 'capabilities' }); assert.equal(info.version, '0.3.0');
     const work = await json('workspace', { action: 'mark', label: 'Codex · smoke test' });
     assert.ok(work.groupId >= 0);
     const group = await json('extension_command', { command: 'invoke', method: 'tabGroups.get', arguments: [work.groupId] });

@@ -1,3 +1,4 @@
+import { api as chrome } from './platform.js';
 const byId = (id) => document.getElementById(id);
 const report = (text, error = false) => { byId('status').textContent = text; byId('status').className = error ? 'error' : 'good'; };
 const saved = await chrome.storage.local.get(['url', 'token']);

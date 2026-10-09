@@ -13,15 +13,15 @@ export class BrowserWorkspace {
     const tab = await this.api.tabs.get(tabId);
     let item = this.work.get(tabId);
     label = label || item?.label || 'Codex работает';
-    if (item && item.label === label && tab.groupId === item.groupId) return { ...item, label };
+    if (item && item.label === label && (!this.api.tabs.group || tab.groupId === item.groupId)) return { ...item, label };
     if (!item) {
-      const originalGroup = tab.groupId >= 0 ? await this.api.tabGroups.get(tab.groupId).catch(() => null) : null;
-      const groupId = await this.api.tabs.group({ tabIds: [tabId], createProperties: { windowId: tab.windowId } });
+      const originalGroup = this.api.tabGroups && tab.groupId >= 0 ? await this.api.tabGroups.get(tab.groupId).catch(() => null) : null;
+      const groupId = this.api.tabs.group && this.api.tabGroups ? await this.api.tabs.group({ tabIds: [tabId], createProperties: { windowId: tab.windowId } }) : null;
       item = { tabId, originalGroupId: tab.groupId ?? -1, originalGroup, groupId, label };
       this.work.set(tabId, item); await this.persist();
     }
     item.label = label;
-    await this.api.tabGroups.update(item.groupId, { title: label.slice(0, 60), color: 'purple', collapsed: false });
+    if (item.groupId !== null) await this.api.tabGroups.update(item.groupId, { title: label.slice(0, 60), color: 'purple', collapsed: false });
     await this.api.action.setBadgeText({ tabId, text: 'AI' });
     await this.api.action.setBadgeBackgroundColor({ tabId, color: '#7958dd' });
     await this.api.action.setTitle({ tabId, title: label });
@@ -36,7 +36,7 @@ export class BrowserWorkspace {
     try {
       const tab = await this.api.tabs.get(tabId);
       // Respect regrouping done by the user while Codex was working.
-      if (tab.groupId === item.groupId) {
+      if (item.groupId !== null && tab.groupId === item.groupId) {
         if (item.originalGroupId >= 0) {
           try { await this.api.tabGroups.get(item.originalGroupId); await this.api.tabs.group({ tabIds: [tabId], groupId: item.originalGroupId }); }
           catch {

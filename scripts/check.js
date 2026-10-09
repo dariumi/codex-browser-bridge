@@ -11,3 +11,8 @@ for (const dir of ['server', 'extension', 'scripts', 'test']) {
 const manifest = JSON.parse(await readFile(new URL('../extension/manifest.json', import.meta.url)));
 for (const filename of [manifest.background.service_worker, manifest.action.default_popup, manifest.options_ui.page, manifest.side_panel?.default_path, ...Object.values(manifest.icons || {}), ...(manifest.content_scripts || []).flatMap((script) => script.js || [])].filter(Boolean)) await readFile(new URL(`../extension/${filename}`, import.meta.url));
 console.log('JavaScript syntax and extension manifest: OK');
+
+const firefox = JSON.parse(await readFile(new URL('../extension/manifest.firefox.json', import.meta.url)));
+if (firefox.version !== manifest.version || firefox.background.service_worker || firefox.permissions.includes('debugger')) throw new Error('Invalid Firefox manifest');
+for (const file of [...firefox.background.scripts, firefox.sidebar_action.default_panel]) await readFile(new URL(`../extension/${file}`, import.meta.url));
+console.log('Firefox manifest: OK');

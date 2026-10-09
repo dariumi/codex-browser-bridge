@@ -96,3 +96,11 @@ test('timeout cleans pending requests and warns about uncertain outcome', async 
   assert.match((await response.json()).error, /outcome is unknown/);
   assert.equal(broker.status().pending, 0);
 });
+test('Firefox extension origin authenticates and exposes its actual backend capabilities', async (t) => {
+  const { base, broker } = await context(t);
+  const ws = new WebSocket(base.replace('http:', 'ws:') + '/extension', { origin: 'moz-extension://12345678-1234-1234-1234-123456789abc' });
+  await once(ws, 'open'); const ready = once(ws, 'message');
+  ws.send(JSON.stringify({ type: 'hello', token, version: '0.3.0', browser: 'firefox', capabilities: { trustedInput: false, backend: 'dom' } }));
+  await ready; assert.equal(broker.status().browser, 'firefox'); assert.equal(broker.status().capabilities.trustedInput, false);
+  ws.close();
+});

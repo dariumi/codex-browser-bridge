@@ -9,9 +9,10 @@ export async function createBroker({ port, token, commandTimeout = 45000, handle
   let extension = null;
   let connectedAt = null;
   let extensionVersion = null;
+  let browser = null, capabilities = null;
   const pending = new Map();
   const sockets = new Set();
-  const status = () => ({ service: 'codex-browser-bridge', version: '0.2.0', connected: extension?.readyState === WebSocket.OPEN, extensionVersion, connectedAt, pending: pending.size });
+  const status = () => ({ service: 'codex-browser-bridge', version: '0.3.0', connected: extension?.readyState === WebSocket.OPEN, extensionVersion, browser, capabilities, connectedAt, pending: pending.size });
   const rejectPending = (message) => { for (const item of pending.values()) item.reject(new Error(message)); pending.clear(); };
   const command = async (action, args) => {
     if (handlers[action]) return handlers[action](args);
@@ -29,7 +30,7 @@ export async function createBroker({ port, token, commandTimeout = 45000, handle
     // No web-page callers, no CORS, and no DNS-rebinding hosts.
     if (req.headers.host !== `127.0.0.1:${server.address().port}` && req.headers.host !== `localhost:${server.address().port}`) return json(res, 403, { error: 'Invalid host' });
     if (req.headers.origin) return json(res, 403, { error: 'Browser origins are not allowed on the command endpoint' });
-    if (req.method === 'GET' && req.url === '/health') return json(res, 200, { service: 'codex-browser-bridge', version: '0.2.0' });
+    if (req.method === 'GET' && req.url === '/health') return json(res, 200, { service: 'codex-browser-bridge', version: '0.3.0' });
     if (!equal(req.headers.authorization, `Bearer ${token}`)) return json(res, 401, { error: 'Unauthorized' });
     if (req.method === 'GET' && req.url === '/status') return json(res, 200, status());
     if (req.method !== 'POST' || req.url !== '/command') return json(res, 404, { error: 'Not found' });
@@ -47,7 +48,7 @@ export async function createBroker({ port, token, commandTimeout = 45000, handle
   });
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32 * 1024 * 1024 });
   server.on('upgrade', (req, socket, head) => {
-    if (req.url !== '/extension' || !/^chrome-extension:\/\/[a-p]{32}$/.test(req.headers.origin || '')) { socket.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return; }
+    if (req.url !== '/extension' || !(/^(?:chrome-extension:\/\/[a-p]{32}|moz-extension:\/\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(req.headers.origin || ''))) { socket.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return; }
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
   });
   wss.on('connection', (ws) => {
@@ -66,8 +67,9 @@ export async function createBroker({ port, token, commandTimeout = 45000, handle
         if (message.type !== 'hello' || !equal(message.token, token)) { ws.close(1008, 'Invalid key'); return; }
         if (extension?.readyState === WebSocket.OPEN) { ws.close(1008, 'A browser is already connected'); return; }
         authenticated = true; clearTimeout(authTimer); extension = ws; connectedAt = new Date().toISOString();
+        browser = message.browser || 'chromium'; capabilities = message.capabilities || null;
         extensionVersion = typeof message.version === 'string' ? message.version : null;
-        ws.send(JSON.stringify({ type: 'ready', version: '0.2.0' }));
+        ws.send(JSON.stringify({ type: 'ready', version: '0.3.0' }));
         return;
       }
       if (message.type === 'ping') { ws.send(JSON.stringify({ type: 'pong' })); return; }
@@ -84,7 +86,7 @@ export async function createBroker({ port, token, commandTimeout = 45000, handle
     });
     ws.on('close', () => {
       clearTimeout(authTimer); clearInterval(heartbeat); sockets.delete(ws);
-      if (extension === ws) { extension = null; extensionVersion = null; connectedAt = null; rejectPending('Browser disconnected; command outcome may be unknown.'); }
+      if (extension === ws) { extension = null; extensionVersion = null; browser = null; capabilities = null; connectedAt = null; rejectPending('Browser disconnected; command outcome may be unknown.'); }
     });
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });

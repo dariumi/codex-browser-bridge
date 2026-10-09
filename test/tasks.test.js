@@ -11,7 +11,7 @@ class FakeApp extends EventEmitter {
   async start() {}
   async request(method, params) {
     this.calls.push({ method, params });
-    if (method === 'thread/start' || method === 'thread/resume') return { thread: { id: 'thread-1' } };
+    if (method === 'thread/start' || method === 'thread/resume') return { thread: { id: 'thread-1' }, model: 'configured-model', reasoningEffort: 'high' };
     if (method === 'turn/start') return { turn: { id: `turn-${++this.turns}` } };
     if (method === 'thread/goal/get') return { goal: { status: this.goal } };
     return {};
@@ -57,4 +57,12 @@ test('development tasks save a checkpoint and use workspace-write; browser mode 
   await manager.handle('steer', { taskId: task.id, text: 'Also test it' });
   assert.equal(task.messages.at(-1).text, 'Also test it');
   assert.ok(app.calls.some((call) => call.method === 'turn/steer'));
+});
+
+test('tasks retain the resolved model and service rerouting rather than guessing from defaults', async (t) => {
+  const { manager, waitRunning } = await fixture(t);
+  await manager.handle('start', { text: 'Inspect the page', tabId: 4 }); const task = await waitRunning();
+  assert.equal(task.model, 'configured-model'); assert.equal(task.effort, 'high');
+  await manager.notification({ method: 'model/rerouted', params: { threadId: task.threadId, fromModel: task.model, toModel: 'actual-model' } });
+  assert.equal(task.model, 'actual-model'); assert.equal(task.modelReroutedFrom, 'configured-model');
 });
