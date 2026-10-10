@@ -18,7 +18,13 @@ if (!process.argv.includes('--no-codex')) {
   if (start < 0) throw new Error('Registered MCP section was not found in Codex config');
   const next = contents.indexOf('\n[', start + header.length), end = next < 0 ? contents.length : next;
   const section = contents.slice(start, end);
-  const updated = /^tool_timeout_sec\s*=/m.test(section) ? section.replace(/^tool_timeout_sec\s*=.*$/m, 'tool_timeout_sec = 240') : section.replace(header, header + '\ntool_timeout_sec = 240');
+  let updated = section;
+  const settings = { startup_timeout_sec: '10', tool_timeout_sec: '900', required: 'true' };
+  if (process.argv.includes('--delegate-browser')) settings.default_tools_approval_mode = '"approve"';
+  for (const [key, value] of Object.entries(settings)) {
+    const expression = new RegExp('^' + key + '\\s*=.*$', 'm');
+    updated = expression.test(updated) ? updated.replace(expression, `${key} = ${value}`) : updated.replace(header, header + `\n${key} = ${value}`);
+  }
   await writeFile(codexConfig, contents.slice(0, start) + updated + contents.slice(end));
 }
 const status = await bridgeRequest('/status');
@@ -26,3 +32,5 @@ console.log(`Extension directory: ${path.join(root, 'extension')}`);
 console.log(`Import this file in extension settings: ${configPath}`);
 console.log(`Bridge ready. Browser connected: ${status.connected}`);
 console.log('Restart/reload Codex MCP to discover browser_* tools.');
+console.log('Then run npm run doctor. For Firefox, run npm run package and load dist/firefox/manifest.json.');
+if (process.argv.includes('--delegate-browser')) console.log('Browser-tool delegation is enabled only for browser_bridge. Extension site restrictions and user consent still apply.');

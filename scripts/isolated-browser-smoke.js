@@ -22,7 +22,7 @@ try {
   while (!broker.status().connected && Date.now() < deadline) await new Promise(r => setTimeout(r, 200));
   assert.equal(broker.status().connected, true, `Isolated Chromium extension did not authenticate: ${browserErrors}`);
   await new Promise((resolve, reject) => { const child = spawn(process.execPath, ['scripts/browser-smoke.js'], { env: { ...process.env, BROWSER_BRIDGE_CONFIG: connection }, stdio: 'inherit' }); child.on('error', reject); child.on('exit', code => code === 0 ? resolve() : reject(Error(`Baseline smoke failed: ${code}`))); });
-  client = new Client({ name: 'isolated-policy-smoke', version: '0.4.0' });
+  client = new Client({ name: 'isolated-policy-smoke', version: '0.5.0' });
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.resolve('server/mcp.js')], env: { ...process.env, BROWSER_BRIDGE_CONFIG: connection }, stderr: 'inherit' }));
   const call = async (action, args = {}) => { const reply = await client.callTool({ name: `browser_${action}`, arguments: args }); if (reply.isError) throw Error(reply.content[0].text); return JSON.parse(reply.content.find(c => c.type === 'text').text); };
   await policySmoke(call, async (name, fn) => { await fn(); console.log(`PASS ${name}`); });

@@ -8,7 +8,7 @@ test('content scripts cannot submit tasks or read extension status; launcher onl
   globalThis.chrome = {
     runtime: { id, getURL: (path) => url + path, getManifest: () => ({ version: '0.2.0' }), onMessage: event('message'), onInstalled: event('installed'), onStartup: event('startup'), sendMessage: noop },
     storage: { session: { get: async () => ({}), set: noop }, local: { get: async () => ({ enabled: false }) } },
-    tabs: { onRemoved: event('removed'), sendMessage: noop },
+    tabs: { onRemoved: event('removed'), sendMessage: noop, get: async id => ({ id, url: 'about:debugging#/runtime/this-firefox' }) },
     debugger: { onDetach: event('detached'), onEvent: event('debuggerEvent'), getTargets: async () => [] },
     action: { setBadgeText: noop, setBadgeBackgroundColor: noop },
     alarms: { onAlarm: event('alarm') }, notifications: { onClicked: event('notification') },
@@ -22,7 +22,10 @@ test('content scripts cannot submit tasks or read extension status; launcher onl
   assert.equal((await send({ type: 'status' }, content)).error, 'Extension UI only');
   assert.equal((await send({ type: 'policy_decide', id: 'forged', allowed: true }, content)).error, 'Extension UI only');
   assert.equal((await send({ type: 'policy_set', domain: 'bank.example', mode: 'allow' }, content)).error, 'Extension UI only');
+  assert.equal((await send({ type: 'updates_control', action: 'configure', policy: 'all' }, content)).error, 'Extension UI only');
   assert.equal((await send({ type: 'open_chat' }, content)).ok, true); assert.equal(opened, 9);
   const status = await send({ type: 'status' }, { id, url: url + 'chat.html' });
   assert.equal(status.version, '0.2.0'); assert.equal(status.enabled, false);
+  const reply = await send({ type: 'chat_start', tabId: 9, text: 'Пройди тест' }, { id, url: url + 'chat.html' });
+  assert.match(reply.error, /служебной странице/); assert.doesNotMatch(reply.error, /URL constructor/);
 });

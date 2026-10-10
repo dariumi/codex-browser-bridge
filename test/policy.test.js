@@ -18,6 +18,8 @@ test('site policy matches normalized hosts and subdomains, never URL substrings;
   await assert.rejects(policy.protect('bank.example', 'ask'), /cannot weaken/);
   await assert.rejects(policy.protect('bank.example', 'allow'), /cannot remove/);
   assert.equal(domainOf('https://пример.рф/a'), 'xn--e1afmkfd.xn--p1ai');
+  assert.equal(domainOf('localhost:17864'), 'localhost');
+  for (const url of ['about:debugging#/runtime/this-firefox', 'about:blank', 'chrome://extensions', 'file:///tmp/test']) assert.throws(() => domainOf(url), /HTTP\(S\)/);
   assert.deepEqual(policyInstruction('Сюда без моего разрешения не ходи', 'https://safe.example/page'), { domain: 'safe.example', mode: 'ask' });
   assert.deepEqual(policyInstruction('Запрети доступ к bank.example навсегда', 'https://safe.example'), { domain: 'bank.example', mode: 'deny' });
   assert.equal(policyInstruction('Пройди тест на этой странице', 'https://safe.example'), null);

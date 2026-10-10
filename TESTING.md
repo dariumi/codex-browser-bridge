@@ -101,3 +101,16 @@ Date: 2026-10-10. Node.js 24.12.0; real Chromium/Brave and Firefox in isolated t
 - `npm run package`: both browser archives build. `npm run lint:firefox`: zero errors and the existing `DANGEROUS_EVAL` warning for explicitly approved page JavaScript.
 
 No public sensitive site was opened for testing. The new guard is not a complete security sandbox; its boundaries and the project responsibility notice are documented in both README versions and DISCLAIMER.md. Live Codex handoff with a real user's sensitive-site decision has not been run; pause/resume and interruption races are covered by TaskManager tests.
+
+## Update 0.5.0
+
+Date: 2026-10-10. Node.js 24.12.0; real Brave/Chromium and Firefox in isolated temporary profiles, plus the installed Brave bridge.
+
+- `npm run check`, `npm test` (52 passing tests), `npm run package` and `npm run lint:firefox` pass. Firefox lint reports zero errors and the existing `DANGEROUS_EVAL` warning for separately approved page JavaScript.
+- `npm run test:isolated`: 18 Chromium automation/access/workspace groups pass. `npm run test:firefox`: 12 groups pass, including submitting a chat task from the actual `about:debugging` tab and receiving the actionable HTTP(S)-target message instead of a URL-constructor exception. Test grants exist only in isolated extensions.
+- Update tests cover the canonical source, release metadata, user policies, active/sleeping task deferral, dirty-checkout rejection, staging failures and safe rollback. A real temporary Git upstream/checkout test validates a release in a detached worktree, fast-forwards it and preserves ignored private configuration. Staged updates also run Firefox lint before installation.
+- Long-task tests cover persisted sleep/deadlines, automatic wake, saved-thread restoration, active-runtime accounting, cancellation and access reapproval. A real Codex app-server accepted automatic goal pause/reactivation. A live managed task slept, woke and completed form actions; its final verification stopped because the test incorrectly requested a hidden select value through an accessibility snapshot. The corrected full test could not run because the app-server account usage limit was reached. Full corrected live end-to-end completion is therefore not claimed.
+- `npm run doctor -- --json` reports a healthy installed bridge: matching 0.5.0 browser/server versions, authenticated connection, configured Codex registration, 33 tools discovered through real stdio MCP, and an active network guard. The doctor does not print connection secrets or account identifiers.
+- The long-task controls, sleeping countdown, early wake button and update banner were previewed at 420px with mock state and inspected with the built-in image viewer. This preview does not substitute for live task validation.
+
+Firefox store signing/permanent installation remains outside this test run. Sleeping requires an available computer, bridge and target page; waking always checks actual page progress and site permissions. Private screenshots, connection files and task history remain ignored and are not published.

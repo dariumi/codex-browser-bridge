@@ -9,7 +9,10 @@ export const defaultRules = [
 ].map(([domain, reason]) => ({ domain, reason, mode: 'ask', builtin: true }));
 export function domainOf(value) {
   const text = String(value || '').trim().replace(/^\*\./, '');
-  const url = new URL(text.includes('://') ? text : `https://${text}`);
+  // Browser-internal schemes are not host names (about:debugging, chrome:, file:, etc.).
+  const scheme = text.match(/^([a-z][a-z0-9+.-]*):/i)?.[1]?.toLowerCase();
+  if (scheme && !['http', 'https'].includes(scheme) && !/^[^/:]+:\d+(?:\/|$)/.test(text)) throw new Error('Эта страница браузера недоступна агенту. Откройте обычную страницу HTTP(S) и выберите её в чате.');
+  const url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || !url.hostname || /[\s*]/.test(url.hostname)) throw new Error('Enter an HTTP(S) URL or domain');
   return url.hostname.toLowerCase().replace(/\.$/, '');
 }

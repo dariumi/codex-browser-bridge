@@ -1,7 +1,7 @@
 import { api as chrome } from './platform.js';
 const $ = (id) => document.getElementById(id);
 let context = null, taskState = { tasks: [], activeTaskId: null }, selectedId = null, displayedTask = null;
-const statuses = { starting: 'Запускаем Codex…', waiting_permission: 'Ждёт твоего разрешения', running: 'Codex работает', cancelling: 'Останавливаем…', completed: 'Задача завершена', failed: 'Ошибка выполнения', interrupted: 'Остановлено', blocked: 'Нужны дополнительные данные', limited: 'Достигнут лимит запуска' };
+const statuses = { sleeping: 'Ожидает до следующего этапа', waking: 'Возобновляет задачу', starting: 'Запускаем Codex…', waiting_permission: 'Ждёт твоего разрешения', running: 'Codex работает', cancelling: 'Останавливаем…', completed: 'Задача завершена', failed: 'Ошибка выполнения', interrupted: 'Остановлено', blocked: 'Нужны дополнительные данные', limited: 'Достигнут лимит запуска' };
 async function send(message) { const reply = await chrome.runtime.sendMessage(message); if (reply?.error) throw new Error(reply.error); return reply; }
 function error(text) { $('error').textContent = text || ''; }
 async function target(tabId) {
@@ -16,18 +16,22 @@ function render() {
   }
   const task = active || taskState.tasks.find((item) => item.id === selectedId) || [...taskState.tasks].reverse().find((item) => item.tabId === context?.tabId);
   const running = !!active;
+  if (active) { $('mode').value = active.mode || 'browser'; $('long-run').checked = active.longRun === true; $('long-settings').hidden = !active.longRun; }
+  modeHint();
   $('send').textContent = running ? 'Отправить уточнение' : 'Передать задачу';
+  $('long-run').disabled = running || $('mode').value !== 'browser' || !$('handoff').checked; $('max-hours').disabled = running;
   $('mode').disabled = running; $('handoff').disabled = running; $('use-tab').disabled = running;
   displayedTask = task; renderAccount(taskState.account, task);
   $('welcome').hidden = !!task;
-  $('progress').classList.toggle('running', running && active.status !== 'waiting_permission'); $('progress').dataset.status = task?.status || 'idle';
+  $('progress').classList.toggle('running', running && !['waiting_permission', 'sleeping'].includes(active.status)); $('progress').dataset.status = task?.status || 'idle';
   $('progress').hidden = !task; $('stop').hidden = !running;
   $('task-state').textContent = statuses[task?.status] || task?.status || '';
-  $('work-caption').textContent = active?.status === 'waiting_permission' ? 'НУЖНО РАЗРЕШЕНИЕ' : running ? 'CODEX В ДЕЛЕ' : task?.status === 'completed' ? 'ГОТОВО' : 'ВЫПОЛНЕНИЕ ОСТАНОВЛЕНО';
-  $('activity').textContent = task?.error || (active?.status === 'waiting_permission' ? 'Выбери «Разрешить» или «Отказать» выше' : running ? activityLabel(task.activity) : task?.status === 'completed' ? 'Результат проверен · отчёт ниже' : 'Ход работы сохранён');
+  $('wake').hidden = active?.status !== 'sleeping';
+  $('work-caption').textContent = active?.status === 'sleeping' ? 'ЗАПЛАНИРОВАННОЕ ОЖИДАНИЕ' : active?.status === 'waiting_permission' ? 'НУЖНО РАЗРЕШЕНИЕ' : running ? 'CODEX В ДЕЛЕ' : task?.status === 'completed' ? 'ГОТОВО' : 'ВЫПОЛНЕНИЕ ОСТАНОВЛЕНО';
+  $('activity').textContent = task?.error || (active?.status === 'sleeping' ? task.sleepReason : active?.status === 'waiting_permission' ? 'Выбери «Разрешить» или «Отказать» выше' : running ? activityLabel(task.activity) : task?.status === 'completed' ? 'Результат проверен · отчёт ниже' : 'Ход работы сохранён');
   const completed = (task?.plan || []).filter(step => step.status === 'completed').length;
   $('step-count').textContent = task?.plan?.length ? `${completed} из ${task.plan.length} этапов` : running ? task.status === 'starting' ? 'Готовится к запуску' : 'Выполняет задачу' : '';
-  $('turn-count').textContent = task?.turns ? `${task.turns} / 20 ходов` : '';
+  $('turn-count').textContent = task?.turns ? `${task.turns} / ${task.maxTurns || 20} ходов` : '';
   $('step-fill').style.width = task?.plan?.length ? `${100 * completed / task.plan.length}%` : task?.status === 'completed' ? '100%' : '0%';
   updateElapsed();
   $('plan').replaceChildren();
@@ -55,12 +59,17 @@ $('composer').addEventListener('submit', async (event) => {
     }
     else {
       if (!context) await target();
-      const task = await send({ type: 'chat_start', tabId: context.tabId, text, mode: $('mode').value, handoff: $('handoff').checked });
+      const task = await send({ type: 'chat_start', tabId: context.tabId, text, mode: $('mode').value, handoff: $('handoff').checked, longRun: $('long-run').checked, maxHours: Number($('max-hours').value) });
       if (task.policyUpdated) $('policy-feedback').textContent = `${task.domain}: ${task.mode === 'deny' ? 'доступ запрещён' : 'теперь требуется разрешение'}`; else selectedId = task.id;
     }
     $('prompt').value = ''; taskState = await send({ type: 'chat_tasks' }); render();
   } catch (err) { error(err.message); } finally { $('send').disabled = false; }
 });
+$('wake').addEventListener('click', async () => { try { await send({ type: 'chat_control', action: 'wake', taskId: taskState.activeTaskId }); } catch (err) { error(err.message); } });
+$('long-run').addEventListener('change', () => { $('long-settings').hidden = !$('long-run').checked; modeHint(); });
+$('handoff').addEventListener('change', syncLongMode);
+function syncLongMode() { if ($('mode').value !== 'browser' || !$('handoff').checked) $('long-run').checked = false; $('long-run').disabled = $('mode').value !== 'browser' || !$('handoff').checked; $('long-settings').hidden = !$('long-run').checked; modeHint(); }
+function modeHint() { $('mode-hint').textContent = $('mode').value === 'development' ? 'Codex сможет изменять исходники этого расширения. Сохраняются копия для отката и результаты проверок. Обновление применяется после завершения задачи.' : $('long-run').checked ? 'Длительная задача: до выбранного срока, 4 часов активной работы и 200 ходов. После ожидания Codex проверит фактический результат.' : 'Codex выполнит этапы и проверит результат. Лимит одного запуска: 30 минут или 20 ходов.'; }
 $('stop').addEventListener('click', async () => {
   try { await send({ type: 'chat_control', action: 'cancel', taskId: taskState.activeTaskId }); } catch (err) { error(err.message); }
 });
@@ -68,7 +77,8 @@ $('use-tab').addEventListener('click', async () => {
   try { const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }); await target(tab?.id); selectedId = null; render(); } catch (err) { error(err.message); }
 });
 $('mode').addEventListener('change', () => {
-  $('mode-hint').textContent = $('mode').value === 'development' ? 'Codex сможет изменять исходники этого расширения. Сохраняются копия для отката и результаты проверок. Обновление применяется после завершения задачи.' : 'Codex выполнит этапы и проверит результат. Лимит одного запуска: 30 минут или 20 ходов.';
+  syncLongMode();
+  modeHint();
 });
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'tasks_update') { taskState = message.data; render(); }
@@ -88,8 +98,10 @@ function activityLabel(activity) {
 function updateElapsed() {
   const task = displayedTask;
   if (!task) { $('elapsed').textContent = ''; return; }
-  const end = ['starting', 'running', 'cancelling', 'waiting_permission'].includes(task.status) ? Date.now() : Date.parse(task.updatedAt || task.createdAt);
+  const end = ['starting', 'running', 'cancelling', 'waiting_permission', 'sleeping', 'waking'].includes(task.status) ? Date.now() : Date.parse(task.updatedAt || task.createdAt);
   const seconds = Math.max(0, Math.floor((end - Date.parse(task.createdAt)) / 1000));
+  $('sleep-until').hidden = task.status !== 'sleeping';
+  if (task.status === 'sleeping') { const remaining = Math.max(0, Math.ceil((Date.parse(task.wakeAt) - Date.now()) / 1000)); $('sleep-until').textContent = `Пробуждение ${new Date(task.wakeAt).toLocaleString('ru-RU')} · осталось ${Math.floor(remaining / 3600)} ч ${Math.floor(remaining % 3600 / 60)} мин ${remaining % 60} с${task.wakeError ? ' · ' + task.wakeError : ''}`; }
   $('elapsed').textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 function windowLabel(minutes, key) {

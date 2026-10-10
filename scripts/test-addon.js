@@ -17,6 +17,13 @@ testApi.storage.session.set({ accessGrants: [{host:'127.0.0.1',kind:'advanced',s
   await writeFile(path.join(dir, 'test-consent.html'), '<!doctype html><div id="permission-requests"></div><script type="module" src="test-consent.js"></script>');
   // Exercise the production permission cards and trusted runtime sender from a fixture UI.
   await writeFile(path.join(dir, 'test-consent.js'), `import './policy-ui.js';
+const fixtureApi=globalThis.browser || globalThis.chrome;
 setInterval(() => { const button=document.querySelector('[data-permission-host="localhost"][data-permission-decision="allow"]'); if(button && !button.disabled) button.click(); }, 500);
+try {
+const internal=(await fixtureApi.tabs.query({})).find(tab=>tab.url?.startsWith(${JSON.stringify(firefox ? 'about:debugging' : 'about:blank')})) || await fixtureApi.tabs.create({url:'about:blank',active:false});
+const reply=await fixtureApi.runtime.sendMessage({type:'chat_start',tabId:internal.id,text:'Пройди тест'});
+document.title='INTERNAL_PAGE_TEST: '+internal.url+' '+(reply.error || 'FAILED');
+await fixtureApi.tabs.remove(internal.id);
+} catch(error) { document.title='INTERNAL_PAGE_TEST: FAILED '+error.message; }
 `);
 }

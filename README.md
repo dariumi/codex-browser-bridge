@@ -8,6 +8,15 @@ A local MCP server and Chromium/Firefox extensions that let Codex work with tabs
 
 **Responsibility notice:** an agent can change data and perform actions using your signed-in accounts. You are responsible for the tasks you authorize and for reviewing their results. The project is provided without warranties; to the extent permitted by applicable law, its authors and contributors accept no liability for agent actions or their consequences. See [Disclaimer](DISCLAIMER.md) and [MIT License](LICENSE).
 
+## What's new in 0.5.0
+
+- Official-repository update checks, visible version mismatch, user-selected auto-update policy, validation before installation and safe rollback.
+- Fixed Firefox chat targeting of internal pages such as `about:debugging`: choose the actual website instead of receiving a URL constructor error.
+- Opt-in long-running tasks with persisted sleep/wake, countdown, early wake and restart recovery. Physical waits do not consume the active runtime budget.
+- Step-by-step [installation and connection guide](docs/INSTALL.md), [Russian guide](docs/INSTALL.ru.md), [agent guide](docs/AGENT_SETUP.md), and `npm run doctor` for end-to-end diagnostics.
+
+Read these guides for setup, permission configuration, updates and long-running limits. **Existing installations:** this first upgrade requires a manual pull/rebuild and bridge/extension reload; automatic updating becomes available in 0.5.0.
+
 ## What's new in 0.4.0
 
 - Persistent domain restrictions: ask before access, or block completely. Common mail, banking, payments, government services, messaging, personal files and password-manager domains require consent by default.
@@ -47,7 +56,7 @@ Temporary add-ons must be loaded again after restarting Firefox. Permanent insta
 
 ### Updating
 
-Reload the extension after updating its files. Accept the new browser permissions if prompted, and verify version **0.4.0**. The connection key and saved access rules are retained. Restart the local bridge to load server changes, and restart the Codex MCP client to discover new tools. For Firefox, rebuild and reload the add-on from `dist/firefox`.
+Reload the extension after updating its files. Accept the new browser permissions if prompted, and verify version **0.5.0**. The connection key and saved access rules are retained. Restart the local bridge to load server changes, and restart the Codex MCP client to discover new tools. For Firefox, rebuild and reload the add-on from `dist/firefox`.
 
 Verify your setup:
 
@@ -65,7 +74,7 @@ Manual Codex configuration uses absolute paths:
 command = "/absolute/path/to/node"
 args = ["/absolute/path/to/project/server/mcp.js"]
 startup_timeout_sec = 10
-tool_timeout_sec = 240
+tool_timeout_sec = 900
 
 [mcp_servers.browser_bridge.env]
 BROWSER_BRIDGE_CONFIG = "/absolute/path/to/project/.local/connection.json"
@@ -100,7 +109,7 @@ The **Chat Codex** button on HTTP(S) pages opens the extension panel. Chat uses 
 
 The target is bound to `tabId`; switching tabs yourself does not move the task. A new message while running steers the current task. You can stop it, follow its plan, read messages and inspect action progress. One chat task runs at a time. History is stored locally in `.local/tasks.json`; a new task for the same tab and mode resumes its previous conversation. After a bridge restart, incomplete tasks are marked interrupted and do not resume automatically.
 
-Handoff uses a [Codex thread goal](https://learn.chatgpt.com/docs/app-server#manage-a-thread-goal), continuing until verified completion, a real blocker, user cancellation or the **30-minute / 20-turn** limit. Waiting for access consent is shown separately. Browser notifications report the result; failures and blocked tasks are not reported as success.
+Handoff uses a [Codex thread goal](https://learn.chatgpt.com/docs/app-server#manage-a-thread-goal), continuing until verified completion, a real blocker, user cancellation or the standard **30-minute / 20-turn** limit (long mode has separate limits in the installation guide). Waiting for access consent is shown separately. Browser notifications report the result; failures and blocked tasks are not reported as success.
 
 The model card reports the configured model before a task, and the resolved or rerouted model while running. Quotas come from `account/rateLimits/read` and updates: remaining percentages and reset times are shown for each available window, without guessing request counts. Unavailable quota data is explicitly marked. The avatar and progress display animate only during work and respect reduced-motion preferences.
 
@@ -118,7 +127,7 @@ New abilities are added as source handlers and applied by reloading. MCP cannot 
 
 ## MCP tools
 
-32 tools:
+33 tools:
 
 | Purpose | Tools |
 | --- | --- |
@@ -130,7 +139,7 @@ New abilities are added as source handlers and applied by reloading. MCP cannot 
 | Waiting and dialogs | `browser_wait`, `browser_dialog` |
 | Diagnostics | `browser_evaluate`, `browser_console`, `browser_network`, `browser_downloads` |
 | Advanced actions | `browser_cdp`, `browser_detach` |
-| Policy, chat and development | `browser_policy`, `browser_workspace`, `browser_task`, `browser_extension_command`, `browser_development` |
+| Updates, policy, chat and development | `browser_updates`, `browser_policy`, `browser_workspace`, `browser_task`, `browser_extension_command`, `browser_development` |
 
 Recommended flow: status → tabs → explicit `tabId` → snapshot/screenshot → action → verification. Never work around an approval-required or denied result.
 
@@ -168,7 +177,7 @@ npm run test:firefox     # Temporary Firefox profile; set FIREFOX_BIN if needed
 
 The isolated suites use separate ports, keys and temporary add-ons. They simulate user consent only for local fixtures, exercise the production permission UI, and verify that blocked redirects never reach the protected test server. They do not grant permissions in your installed extension.
 
-`npm run test:browser` tests the installed Chromium extension and needs your JavaScript/CDP consent for the local fixture. `npm run test:handoff` starts a real Codex task using your login and model, and needs the corresponding local diagnostic consent for verification. These tests create their own fixture tabs and close them afterward. `npm run fixture` starts the page for manual testing. Results/screenshots are stored under `.local/`; inspect images with the built-in image viewer. CI runs checks, unit tests, packaging and Firefox lint on Node 22 and 24.
+`npm run test:browser` tests the installed Chromium extension and needs your JavaScript/CDP consent for the local fixture. `npm run test:handoff` starts a real Codex task using your login and model, and verifies results with accessibility snapshots; `npm run test:handoff -- --long` also tests scheduled sleep and wake. These tests create their own fixture tabs and close them afterward. `npm run fixture` starts the page for manual testing. Results/screenshots are stored under `.local/`; inspect images with the built-in image viewer. CI runs checks, unit tests, packaging and Firefox lint on Node 22 and 24.
 
 Packages are `dist/codex-browser-bridge-extension.zip` and `dist/codex-browser-bridge-firefox.zip`; install the MCP server separately from this repository. Connection keys and test artifacts are never packaged.
 

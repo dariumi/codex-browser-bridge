@@ -10,7 +10,7 @@ export async function bridgeRequest(endpoint, command, { autoStart = true } = {}
       method: command ? 'POST' : 'GET',
       headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
       body: command ? JSON.stringify(command) : undefined,
-      signal: AbortSignal.timeout(command?.action === 'development' ? 200000 : command ? 50000 : 1500)
+      signal: AbortSignal.timeout(command?.action === 'updates' ? 15 * 60 * 1000 : command?.action === 'development' ? 200000 : command ? 50000 : 1500)
     });
     const value = await response.json();
     if (!response.ok) throw new Error(value.error || `Bridge HTTP ${response.status}`);

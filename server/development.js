@@ -4,8 +4,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { root as projectRoot, configPath } from './config.js';
 
-const sourceDirs = ['extension', 'server', 'scripts', 'test', '.github'];
-const sourceFiles = ['package.json', 'package-lock.json', 'README.md', 'README.ru.md', 'DISCLAIMER.md', 'TESTING.md', 'ASSETS.md', 'LICENSE', '.gitignore'];
+const sourceDirs = ['extension', 'server', 'scripts', 'test', '.github', 'docs'];
+const sourceFiles = ['package.json', 'package-lock.json', 'update.json', 'AGENTS.md', 'README.md', 'README.ru.md', 'DISCLAIMER.md', 'TESTING.md', 'ASSETS.md', 'LICENSE', '.gitignore'];
 export class DevelopmentManager {
   constructor({ root = projectRoot, checkpointDir = path.join(path.dirname(configPath), 'checkpoints'), runner, authorize = () => false, apply } = {}) {
     this.root = root; this.checkpointDir = checkpointDir; this.runner = runner || this.runProcess.bind(this);

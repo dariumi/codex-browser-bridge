@@ -19,12 +19,12 @@ try {
   const token = randomBytes(32).toString('hex');
   broker = await createBroker({ port: 0, token }); fixture = await startFixture(0);
   await prepareTestAddon(dir, { url: `ws://127.0.0.1:${broker.port}/extension`, token, enabled: true }, true);
-  runner = await webExt.cmd.run({ sourceDir: dir, artifactsDir: path.join(dir, 'artifacts'), firefox: process.env.FIREFOX_BIN || 'firefox', noReload: true, noInput: true, startUrl: [fixture.url], args: ['-headless'], target: ['firefox-desktop'] }, { shouldExitProgram: false });
+  runner = await webExt.cmd.run({ sourceDir: dir, artifactsDir: path.join(dir, 'artifacts'), firefox: process.env.FIREFOX_BIN || 'firefox', noReload: true, noInput: true, startUrl: [fixture.url, 'about:debugging#/runtime/this-firefox'], args: ['-headless'], target: ['firefox-desktop'] }, { shouldExitProgram: false });
   const deadline = Date.now() + 30000;
   while (!broker.status().connected && Date.now() < deadline) await new Promise(r => setTimeout(r, 200));
   assert.equal(broker.status().connected, true, 'Firefox extension did not authenticate'); assert.equal(broker.status().browser, 'firefox');
   await writeFile(connectionPath, JSON.stringify({ port: broker.port, token }), { mode: 0o600 });
-  client = new Client({ name: 'firefox-smoke', version: '0.4.0' });
+  client = new Client({ name: 'firefox-smoke', version: '0.5.0' });
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.resolve('server/mcp.js')], env: { ...process.env, BROWSER_BRIDGE_CONFIG: connectionPath }, stderr: 'inherit' }));
   const call = async (action, args = {}) => {
     const reply = await client.callTool({ name: `browser_${action}`, arguments: { ...(tabId ? { tabId } : {}), ...args } });
@@ -36,6 +36,11 @@ try {
   async function step(name, fn) { await fn(); results.push({ name, passed: true }); console.log(`PASS ${name}`); }
   await step('Firefox authentication and capabilities', async () => { const info = await call('extension_command', { command: 'capabilities' }); assert.equal(info.browser, 'firefox'); assert.equal(info.trustedInput, false); });
   const tabs = await call('tabs'); tabId = tabs.find(tab => tab.url.startsWith(fixture.url))?.tabId; assert.ok(tabId);
+  await step('Firefox chat rejects about:debugging with an actionable message', async () => {
+    const deadline = Date.now() + 10000; let result;
+    while (Date.now() < deadline) { result = (await call('tabs')).find(tab => tab.title.startsWith('INTERNAL_PAGE_TEST:')); if (result) break; await new Promise(resolve => setTimeout(resolve, 100)); }
+    assert.ok(result); assert.match(result.title, /about:debugging/); assert.match(result.title, /служебной странице/); assert.doesNotMatch(result.title, /URL constructor|FAILED/);
+  });
   await step('snapshot refs and form actions', async () => {
     const snapshot = await call('snapshot'); const field = snapshot.nodes.find(n => n.role === 'textbox' && n.name === 'Имя'); assert.ok(field?.ref);
     await call('fill', { ref: field.ref, text: 'Firefox работает' }); await call('click', { selector: '#submit' });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { TaskManager } from '../server/tasks.js';
@@ -100,4 +100,43 @@ test('a quick UI approval waits for interruption and late old-turn completion ca
   await manager.notification({ method: 'turn/completed', params: { threadId: task.threadId, turn: { id: oldTurn, status: 'interrupted' } } });
   assert.equal(task.status, 'running');
   app.request = request;
+});
+
+test('long-running sleep persists a deadline, stops turns and wakes the same task automatically', async t => {
+  const { manager, app, waitRunning } = await fixture(t);
+  await manager.handle('start', { text: 'Wait for the timer and finish', tabId: 4, longRun: true, maxHours: 1 }); const task = await waitRunning();
+  const oldTurn = task.turnId, budget = task.activeRemainingMs;
+  const result = await manager.handle('sleep', { taskId: task.id, seconds: 1, reason: 'Timer is running', resumeInstruction: 'Check the completed counter' });
+  assert.equal(result.sleeping, true); assert.equal(manager.active.id, task.id); assert.equal(task.status, 'sleeping');
+  await manager.notification({ method: 'turn/completed', params: { threadId: task.threadId, turn: { id: oldTurn, status: 'completed' } } });
+  assert.equal(app.turns, 1);
+  await manager.handle('steer', { taskId: task.id, text: 'Also check the button' });
+  const saved = JSON.parse(await readFile(manager.historyPath, 'utf8'))[0]; assert.equal(saved.wakeAt, result.wakeAt); assert.equal(saved.timer, undefined);
+  await new Promise(resolve => setTimeout(resolve, 1250));
+  assert.equal(task.status, 'running'); assert.equal(app.turns, 2); assert.equal(task.maxTurns, 200); assert.ok(task.activeRemainingMs <= budget);
+  assert.match(app.calls.filter(c => c.method === 'turn/start').at(-1).params.input[0].text, /Also check the button/);
+  assert.ok(app.calls.some(c => c.method === 'thread/goal/set' && c.params.status === 'paused'));
+});
+test('sleep requires opt-in, cancellation prevents wake and restored sleep resumes its thread', async t => {
+  const { manager, waitRunning } = await fixture(t);
+  await manager.handle('start', { text: 'Short task', tabId: 4 }); const short = await waitRunning();
+  await assert.rejects(manager.handle('sleep', { taskId: short.id, seconds: 1, reason: 'Wait' }), /long-running/); await manager.handle('cancel', { taskId: short.id });
+  await manager.handle('start', { text: 'Long task', tabId: 4, longRun: true }); const task = await waitRunning();
+  await manager.handle('sleep', { taskId: task.id, seconds: 10, reason: 'Counter' });
+  await manager.stop({ preserveSleeping: true }); assert.equal(task.status, 'sleeping');
+  const app = new FakeApp(), restored = new TaskManager({ app, historyPath: manager.historyPath, command: async () => ({}) }); t.after(() => restored.stop());
+  await restored.ready; const same = restored.active; assert.equal(same.id, task.id); assert.equal(same.status, 'sleeping');
+  await restored.handle('wake', { taskId: same.id }); assert.equal(same.status, 'running'); assert.ok(app.calls.some(c => c.method === 'thread/resume'));
+  await restored.handle('sleep', { taskId: same.id, seconds: 1, reason: 'Wait again' }); await restored.handle('cancel', { taskId: same.id });
+  await new Promise(resolve => setTimeout(resolve, 1050)); assert.equal(same.status, 'interrupted'); assert.equal(app.turns, 1);
+});
+test('wake rechecks access and waits for user consent without bypassing the site policy', async t => {
+  const { manager, app, waitRunning } = await fixture(t);
+  await manager.handle('start', { text: 'Long task', tabId: 4, longRun: true }); const task = await waitRunning();
+  await manager.handle('sleep', { taskId: task.id, seconds: 10, reason: 'Timer' });
+  let denied = true; const request = { id: 'wake-permission', scope: task.id, host: 'private.example', kind: 'site' };
+  manager.command = async () => { if (denied) { await manager.permissionEvent({ type: 'pending', request }); throw Error('ACCESS_APPROVAL_REQUIRED'); } return {}; };
+  await manager.handle('wake', { taskId: task.id }); assert.equal(task.status, 'waiting_permission'); assert.equal(app.turns, 1);
+  denied = false; task.wakeAt = new Date(Date.now() - 1).toISOString();
+  await manager.permissionEvent({ type: 'decision', request, allowed: true }); assert.equal(task.status, 'running'); assert.equal(app.turns, 2);
 });

@@ -18,7 +18,7 @@ function uiRequest(action, args = {}) {
   if (!state.connected || socket?.readyState !== WebSocket.OPEN) return Promise.reject(new Error('Сначала подключите расширение к локальному мосту.'));
   const id = crypto.randomUUID();
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { uiPending.delete(id); reject(new Error('Мост не ответил на запрос чата. Проверьте статус задачи перед повторной отправкой.')); }, 15000);
+    const timer = setTimeout(() => { uiPending.delete(id); reject(new Error('Мост не ответил на запрос. Проверьте состояние перед повторной отправкой.')); }, action === 'updates_apply' ? 15 * 60 * 1000 : action === 'updates_check' ? 200000 : 15000);
     uiPending.set(id, { resolve, reject, timer });
     socket.send(JSON.stringify({ type: 'ui_request', id, action, args }));
   });
@@ -137,16 +137,21 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       return { tabId: tab.id, title: tab.title, url: tab.url, connected: state.connected };
     }
     if (message.type === 'chat_account') return uiRequest('account', { refresh: message.refresh === true });
+    if (message.type === 'updates_control') {
+      if (!['status', 'check', 'apply', 'configure'].includes(message.action)) throw new Error('Invalid update action');
+      return uiRequest('updates_' + message.action, { policy: message.policy });
+    }
     if (message.type === 'chat_tasks') { tasksState = await uiRequest('list'); return tasksState; }
     if (message.type === 'chat_start') {
       const tab = await automation.tab(message.tabId || chatTabId);
+      if (!/^https?:\/\//i.test(tab.url || '')) throw new Error('На служебной странице браузера выполнять задачи нельзя. Откройте нужный сайт HTTP(S), затем нажмите «Использовать открытую вкладку».');
       const rule = policyInstruction(message.text, tab.url);
       if (rule) return { policyUpdated: true, ...await policy.setRule(rule.domain, rule.mode) };
       await policy.ensure(tab.url, 'chat_start');
-      return uiRequest('start', { text: message.text, tabId: tab.id, title: tab.title, url: tab.url, mode: message.mode, handoff: message.handoff });
+      return uiRequest('start', { text: message.text, tabId: tab.id, title: tab.title, url: tab.url, mode: message.mode, handoff: message.handoff, longRun: message.longRun, maxHours: message.maxHours });
     }
     if (message.type === 'chat_control') {
-      if (!['cancel', 'steer'].includes(message.action)) throw new Error('Invalid task control');
+      if (!['cancel', 'steer', 'wake'].includes(message.action)) throw new Error('Invalid task control');
       if (message.action === 'steer') {
         const task = tasksState.tasks.find(item => item.id === message.taskId);
         const tab = await automation.tab(task?.tabId || chatTabId);

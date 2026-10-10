@@ -1,7 +1,7 @@
 {
   "name": "codex-browser-bridge",
-  "version": "0.4.0",
-  "description": "Control your existing Chromium browser from Codex through a local MCP and extension bridge",
+  "version": "0.5.0",
+  "description": "Control Chromium and Firefox from Codex through a local MCP and extension bridge",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -20,7 +20,8 @@
     "test:handoff": "node scripts/handoff-smoke.js",
     "test:firefox": "node scripts/firefox-smoke.js",
     "lint:firefox": "web-ext lint --source-dir dist/firefox --ignore-files manifest.firefox.json",
-    "test:isolated": "node scripts/isolated-browser-smoke.js"
+    "test:isolated": "node scripts/isolated-browser-smoke.js",
+    "doctor": "node scripts/doctor.js"
   },
   "keywords": [],
   "author": "",
