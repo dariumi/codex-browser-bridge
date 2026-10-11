@@ -104,3 +104,13 @@ test('Firefox extension origin authenticates and exposes its actual backend capa
   await ready; assert.equal(broker.status().browser, 'firefox'); assert.equal(broker.status().capabilities.trustedInput, false);
   ws.close();
 });
+
+test('synthetic lab is public while command/status auth and origin/host restrictions stay enforced', async t => {
+  const { request } = await context(t);
+  const response = await request('/complex', null, { Authorization: '' });
+  assert.equal(response.status, 200); assert.match(await response.text(), /Complex Lab/);
+  assert.equal((await request('/lab.js', null, { Authorization: '' })).status, 200);
+  assert.equal((await request('/status', null, { Authorization: '' })).status, 401);
+  assert.equal((await request('/complex', null, { Origin: 'https://evil.example' })).status, 403);
+  assert.equal((await request('/.local/connection.json', null, { Authorization: '' })).status, 401);
+});

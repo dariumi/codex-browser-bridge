@@ -138,3 +138,13 @@ Date: 2026-10-11. Compact conversation UI: scrollable messages with a bottom com
 - Two new command tests validate prefix filtering, keyboard/click selection without executing tasks, Escape/submission dismissal and leaving ordinary text alone. All 57 independent tests pass.
 - Full `npm test` still fails in app-server, broker and MCP integration files under the environment restrictions previously recorded. Both browser suites were attempted and fail at loopback creation (`listen EPERM`). Live layout, scrolling, keyboard focus and browser settings-page closing are not claimed as verified.
 - Versions agree at 0.6.1 across both manifests, package/lockfile, update metadata and bridge clients. Update classification remains non-critical. Prepared archives are under ignored `dist/`; no private configuration or history is included.
+
+
+## Working update 0.6.2
+
+Date: 2026-10-11. Chat close button, extension diagnostics and local Complex Lab. The lab is served by the loopback bridge or `npm run fixture`; the remote TLS gateway is unchanged. The dedicated launcher still uses the production site guard and records only its new test tab as temporary.
+
+- Checks, packaging and Firefox lint pass in the separate validation worktree; one existing `DANGEROUS_EVAL` warning remains. Both archives are prepared under ignored `dist/`.
+- 63 independent tests pass. Six new checks cover Firefox click-stack closing, Chromium global/tab panel closing, dedicated loopback targets, allowlisted static assets, conditional form/stale-search validation, report privacy and refusal to request physical hardware in the optional virtual-stream test. A broker integration test additionally checks public synthetic assets without weakening command authentication, origin rejection or private-file isolation; its execution is blocked by socket restrictions here.
+- Isolated Chromium/Firefox suites include the new complex scenarios: controlled DOM replacement, conditional multi-stage form, stale async search, open Shadow DOM, HTML drag payload, pointer drag, frame boundary and actual video-frame/animation metadata. Result assertions use snapshots rather than eval under the strict fixture CSP. Higher-level iframe input remains unsupported in Firefox; Chromium CDP frame input and opt-in virtual streams are recorded as not run, not counted as passing actions.
+- Full `npm test` and both browser suites were attempted. The same three app-server/broker/MCP integration files fail under environment restrictions; browser suites stop at loopback creation (`listen EPERM`). No new real-browser passes, screenshots, installed-extension update or GitHub push are claimed. Closing panel APIs and layout still require the live browser run.

@@ -1,10 +1,13 @@
 import http from 'node:http';
+import { serveLab } from '../server/lab-assets.js';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
 export async function startFixture(port = 17864) {
   const html = await readFile(new URL('../test/fixture.html', import.meta.url));
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
+    if (![`127.0.0.1:${server.address().port}`, `localhost:${server.address().port}`].includes(req.headers.host)) { res.writeHead(403); res.end(); return; }
+    if (await serveLab(req, res)) return;
     if (req.url === '/ping') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true}'); }
     else if (req.url === '/download') { res.writeHead(200, { 'Content-Type': 'text/plain', 'Content-Disposition': 'attachment; filename="sample.txt"' }); res.end('Browser Bridge download fixture'); }
     else { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(html); }
@@ -13,6 +16,6 @@ export async function startFixture(port = 17864) {
   return { url: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const fixture = await startFixture(); console.log(`Browser test fixture: ${fixture.url}`);
+  const fixture = await startFixture(); console.log(`Browser test fixture: ${fixture.url}\nComplex Lab: ${fixture.url}/complex`);
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, async () => { await fixture.close(); process.exit(0); });
 }

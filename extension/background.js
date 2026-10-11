@@ -1,3 +1,4 @@
+import { diagnosticURL } from './diagnostics-target.js';
 import { VirtualDevices } from './virtual-devices.js';
 import { DeviceBridge } from './native-devices.js';
 import { api as chrome, capabilities, openChat, openChatPage } from './platform.js';
@@ -11,7 +12,7 @@ import { extensionCommand } from './commands.js';
 const workspace = new BrowserWorkspace(chrome, { owner: () => tasksState.activeTaskId, target: () => tasksState.tasks.find(task => task.id === tasksState.activeTaskId)?.tabId });
 const automation = chrome.debugger ? new BrowserAutomation(chrome, workspace) : new FirefoxAutomation(chrome, workspace);
 let socket = null, heartbeat = null, retry = null, generation = 0, authBlocked = false;
-let state = { connected: false, enabled: false, error: null };
+let state = { connected: false, enabled: false, error: null, bridgeVersion: null };
 const uiPending = new Map();
 let tasksState = { tasks: [], activeTaskId: null, timeoutMinutes: 30 }, chatTabId = null;
 chrome.storage.session.get('chatTabId').then((saved) => { chatTabId ||= saved.chatTabId || null; });
@@ -66,7 +67,7 @@ async function connect() {
   ws.onmessage = async ({ data }) => {
     let message;
     try { message = JSON.parse(data); } catch { return; }
-    if (message.type === 'ready') { state.connected = true; uiRequest('list').then(data => { tasksState = data; broadcast({ type: 'tasks_update', data }); }).catch(() => {}); state.error = null; badge('ON', '#168457'); return; }
+    if (message.type === 'ready') { state.connected = true; state.bridgeVersion = message.version || null; uiRequest('list').then(data => { tasksState = data; broadcast({ type: 'tasks_update', data }); }).catch(() => {}); state.error = null; badge('ON', '#168457'); return; }
     if (message.type === 'ui_result') {
       const pending = uiPending.get(message.id);
       if (pending) { clearTimeout(pending.timer); uiPending.delete(message.id); message.error ? pending.reject(new Error(message.error)) : pending.resolve(message.result); }
@@ -109,7 +110,7 @@ async function disconnect() {
   const ws = socket; socket = null;
   if (ws) ws.close();
   for (const pending of uiPending.values()) { clearTimeout(pending.timer); pending.reject(new Error('Соединение отключено.')); } uiPending.clear();
-  state.connected = false;
+  state.connected = false; state.bridgeVersion = null;
   devices.disconnect(); await virtualDevices.disconnect(); await automation.detachAll();
   await workspace.releaseAll(); await policy.reset();
   badge('', '#8b6470');
@@ -137,6 +138,10 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       if (tasksState.activeTaskId && ['release_all', 'cleanup'].includes(message.action)) throw new Error('Сначала остановите текущую задачу.');
       if (!['release_all', 'collapse', 'merge', 'cleanup', 'keep'].includes(message.action)) throw new Error('Invalid workspace control');
       return browserCommand('workspace', { action: message.action, tabId: message.tabId });
+    }
+    if (message.type === 'diagnostics_open') {
+      if (tasksState.activeTaskId) throw new Error('Сначала остановите текущую задачу.');
+      return browserCommand('new_tab', { url: diagnosticURL(message.url), temporary: true, active: true }, () => {});
     }
     if (message.type === 'chat_target_set') {
       const tab = await automation.tab(message.tabId); chatTabId = tab.id;

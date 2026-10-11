@@ -9,6 +9,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { createBroker } from '../server/broker.js';
 import { startFixture } from './fixture.js';
 import { prepareTestAddon } from './test-addon.js';
+import { complexSmoke } from './complex-smoke.js';
 import { policySmoke } from './policy-smoke.js';
 
 const dir = await mkdtemp(path.join(tmpdir(), 'codex-firefox-'));
@@ -24,13 +25,13 @@ try {
   while (!broker.status().connected && Date.now() < deadline) await new Promise(r => setTimeout(r, 200));
   assert.equal(broker.status().connected, true, 'Firefox extension did not authenticate'); assert.equal(broker.status().browser, 'firefox');
   await writeFile(connectionPath, JSON.stringify({ port: broker.port, token }), { mode: 0o600 });
-  client = new Client({ name: 'firefox-smoke', version: '0.6.1' });
+  client = new Client({ name: 'firefox-smoke', version: '0.6.2' });
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.resolve('server/mcp.js')], env: { ...process.env, BROWSER_BRIDGE_CONFIG: connectionPath }, stderr: 'inherit' }));
   const call = async (action, args = {}) => {
     const reply = await client.callTool({ name: `browser_${action}`, arguments: { ...(tabId ? { tabId } : {}), ...args } });
     if (reply.isError) throw new Error(reply.content[0].text);
     const metadata = JSON.parse(reply.content.find(item => item.type === 'text').text);
-    return action === 'screenshot' ? { ...metadata, data: reply.content.find(item => item.type === 'image').data } : metadata;
+    const image = reply.content.find(item => item.type === 'image'); return image ? { ...metadata, data: image.data } : metadata;
   };
   const value = async expression => (await call('evaluate', { expression })).value;
   async function step(name, fn) { await fn(); results.push({ name, passed: true }); console.log(`PASS ${name}`); }
@@ -71,7 +72,7 @@ try {
     await call('detach'); assert.equal((await call('workspace', { action: 'inspect' })).tabs.length, 0);
     await call('close_tab');
   });
-  tabId = null; await policySmoke(call, step);
+  tabId = null; const complex = await complexSmoke(call, step); results.push(...complex.results); await policySmoke(call, step);
   await writeFile('.local/firefox-results.json', JSON.stringify({ browser: 'Firefox', passed: true, results }, null, 2));
 } finally {
   await client?.close(); await runner?.exit(); await broker?.close(); await fixture?.close(); await rm(dir, { recursive: true, force: true }); await rm(connectionPath, { force: true });

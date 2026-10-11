@@ -8,6 +8,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { createBroker } from '../server/broker.js';
 import { prepareTestAddon } from './test-addon.js';
+import { complexSmoke } from './complex-smoke.js';
 import { policySmoke } from './policy-smoke.js';
 const dir = await mkdtemp(path.join(tmpdir(), 'codex-chromium-'));
 let broker, browser, client;
@@ -22,9 +23,11 @@ try {
   while (!broker.status().connected && Date.now() < deadline) await new Promise(r => setTimeout(r, 200));
   assert.equal(broker.status().connected, true, `Isolated Chromium extension did not authenticate: ${browserErrors}`);
   await new Promise((resolve, reject) => { const child = spawn(process.execPath, ['scripts/browser-smoke.js'], { env: { ...process.env, BROWSER_BRIDGE_CONFIG: connection }, stdio: 'inherit' }); child.on('error', reject); child.on('exit', code => code === 0 ? resolve() : reject(Error(`Baseline smoke failed: ${code}`))); });
-  client = new Client({ name: 'isolated-policy-smoke', version: '0.6.1' });
+  client = new Client({ name: 'isolated-policy-smoke', version: '0.6.2' });
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.resolve('server/mcp.js')], env: { ...process.env, BROWSER_BRIDGE_CONFIG: connection }, stderr: 'inherit' }));
-  const call = async (action, args = {}) => { const reply = await client.callTool({ name: `browser_${action}`, arguments: args }); if (reply.isError) throw Error(reply.content[0].text); return JSON.parse(reply.content.find(c => c.type === 'text').text); };
+  const call = async (action, args = {}) => { const reply = await client.callTool({ name: `browser_${action}`, arguments: args }); if (reply.isError) throw Error(reply.content[0].text); const metadata = JSON.parse(reply.content.find(c => c.type === 'text').text); const image = reply.content.find(c => c.type === 'image'); return image ? { ...metadata, data: image.data } : metadata; };
+  const complex = await complexSmoke(call, async (name, fn) => { await fn(); console.log(`PASS ${name}`); });
+  console.log(JSON.stringify(complex.results));
   await policySmoke(call, async (name, fn) => { await fn(); console.log(`PASS ${name}`); });
 } finally {
   await client?.close();

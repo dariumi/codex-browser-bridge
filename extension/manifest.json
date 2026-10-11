@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Codex Browser Bridge",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Connect your existing browser tabs to your local Codex MCP server.",
   "minimum_chrome_version": "120",
   "permissions": [

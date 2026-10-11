@@ -1,7 +1,13 @@
 import { installCommands } from './chat-commands.js';
 import { t, language } from './i18n.js';
-import { api as chrome } from './platform.js';
+import { api as chrome, closeChat } from './platform.js';
 const $ = (id) => document.getElementById(id);
+let chatView = {};
+$('chat-close').disabled = true;
+Promise.all([chrome.tabs.getCurrent(), chrome.windows.getCurrent()]).then(([tab, window]) => {
+  chatView = { windowId: window.id, pageTabId: tab?.url?.split('?')[0] === chrome.runtime.getURL('chat.html') ? tab.id : undefined };
+}).catch(() => {}).finally(() => { $('chat-close').disabled = false; });
+$('chat-close').onclick = () => closeChat({ ...chatView, tabId: context?.tabId }, chrome).catch(err => error(t(err.message)));
 let context = null, taskState = { tasks: [], activeTaskId: null }, selectedId = null, displayedTask = null;
 const statuses = { sleeping: 'Ожидает до следующего этапа', waking: 'Возобновляет задачу', starting: 'Запускаем Codex…', waiting_permission: 'Ждёт твоего разрешения', running: 'Codex работает', cancelling: 'Останавливаем…', completed: 'Задача завершена', failed: 'Ошибка выполнения', interrupted: 'Остановлено', blocked: 'Нужны дополнительные данные', limited: 'Достигнут лимит запуска' };
 async function send(message) { const reply = await chrome.runtime.sendMessage(message); if (reply?.error) throw new Error(reply.error); return reply; }

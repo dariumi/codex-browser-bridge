@@ -220,3 +220,5 @@ Quick commands: `/new`, `/clear`, `/stop`, `/wake`, `/test`, `/summarize`, `/med
 Maintainers can run `npm run github:configure` to set repository description, homepage and search topics. Topics improve discoverability; search ranking is controlled by GitHub.
 
 Version 0.6.1 keeps the composer at the bottom and model/effort controls compact. Type `/` for command suggestions (arrows, Enter/Tab to select, Escape to dismiss); selecting a suggestion does not execute it. Settings close with ✕, Escape or a click outside. Usage details are in tooltips and settings; unavailable meters are hidden.
+
+Version 0.6.2 adds a close-chat button and [local Diagnostics / Complex Lab](docs/DIAGNOSTICS.md). Run expanded isolated Chromium and Firefox regressions to check complex page behavior; unsupported stages remain explicit.

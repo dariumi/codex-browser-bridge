@@ -19,3 +19,5 @@ textarea{display:block;min-height:48px;max-height:140px;padding:8px 9px;font-siz
 #settings-backdrop{position:fixed;inset:0;background:#0006;z-index:4}#control-rail details{margin-top:5px}#control-rail label{margin-top:8px}#control-rail .account-card{padding:12px}#control-rail .target{margin:0;padding:12px}#control-rail .update-card{margin:0;padding:12px}
 #progress{margin:8px 0;padding:0 12px 10px;border-radius:13px;flex:none}.work-scene{height:48px;margin:4px 0}.work-avatar{width:32px;height:32px;border-radius:10px}.work-avatar img{border-radius:7px}.orbit{width:48px;height:48px}.orbit-two{width:60px;height:60px}.task-heading strong{font-size:12px}.live-row{margin:8px 0}.step-meta{margin-bottom:4px}
 @media(max-width:350px){.chat{padding:8px}.usage-bars{gap:8px}.usage-bars label{font-size:8px}}
+
+#chat-close{margin-left:auto;font-size:16px;line-height:1;padding:7px 9px;align-self:center}

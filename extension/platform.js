@@ -22,3 +22,19 @@ export async function openChatPage(tabId, browserApi = api) {
   if (existing) return browserApi.tabs.update(existing.id, { url, active: true });
   return browserApi.tabs.create({ url, active: true });
 }
+// Keep Firefox's close call in the original click stack. Closing the UI never
+// cancels its task and never closes the page under test.
+export function closeChat({ pageTabId, tabId, windowId } = {}, browserApi = api) {
+  try {
+    if (pageTabId) return Promise.resolve(browserApi.tabs.remove(pageTabId));
+    if (browserApi.sidebarAction?.close) return Promise.resolve(browserApi.sidebarAction.close());
+    if (browserApi.sidePanel?.close) {
+      if (tabId) return browserApi.sidePanel.close({ tabId }).catch(error => {
+        if (windowId === undefined) throw error;
+        return browserApi.sidePanel.close({ windowId });
+      });
+      return Promise.resolve(browserApi.sidePanel.close({ windowId }));
+    }
+    return Promise.reject(new Error('В этой версии браузера закройте панель её штатной кнопкой ✕.'));
+  } catch (error) { return Promise.reject(error); }
+}

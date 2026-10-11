@@ -1,7 +1,28 @@
 const api = globalThis.browser || globalThis.chrome;
 const saved = await api.storage.local.get('language');
 export const language = saved.language === 'ru' || saved.language === 'en' ? saved.language : (navigator.language.toLowerCase().startsWith('ru') ? 'ru' : 'en');
-const pairs = `Закрыть настройки|Close settings
+const pairs = `Версии моста и расширения совпадают|Bridge and extension versions match
+Закрыть чат|Close chat
+Закрыть|Close
+Диагностика|Diagnostics
+Диагностика и тестовая страница ↗|Diagnostics and test page ↗
+Проверить подключение|Check connection
+Сложная тестовая страница|Complex test page
+Адрес локальной тестовой страницы|Local test page URL
+Открыть тестовую страницу|Open test page
+Тестовая страница открыта. Поручите Codex пройти её этапы.|Test page opened. Ask Codex to complete its stages.
+Управление включено|Browser control enabled
+Расширение подключено к мосту|Extension connected to bridge
+Защита доступа к сайтам работает|Site access guard available
+Боковая панель доступна|Sidebar available
+Проверка соединения и сложная локальная страница. Результат подключения не заменяет тест действий браузера.|Connection check and complex local page. Connection status does not replace browser action tests.
+Формы с заменой DOM, отложенный поиск, Shadow DOM, перетаскивания, iframe, медиа и виртуальные потоки. Откройте страницу, затем поручите Codex пройти этапы через её плавающую кнопку. Разрешения выдаются обычным способом.|Forms with DOM replacement, delayed search, Shadow DOM, dragging, frames, media and virtual streams. Open the page, then ask Codex to complete the stages using its floating button. Standard permissions apply.
+Если мост работает удалённо, запустите|If the bridge is remote, run
+на компьютере с браузером и укажите|on the browser computer and use
+. Тестовая вкладка помечается временной; исходные вкладки сохраняются.|. The test tab is marked temporary; original tabs are preserved.
+Браузерные ограничения и запрещённые действия следует отмечать как UNSUPPORTED. Проверка виртуальных устройств необязательна и требует отдельного включения.|Report browser restrictions and unsupported actions as UNSUPPORTED. Virtual device testing is optional and requires separate opt-in.
+В этой версии браузера закройте панель её штатной кнопкой ✕.|In this browser version, use the browser's own ✕ button to close the panel.
+Закрыть настройки|Close settings
 Команды|Commands
 Новая задача|New task
 Просмотреть медиа|View media

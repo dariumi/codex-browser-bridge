@@ -1,6 +1,6 @@
 {
-  "version": "0.6.1",
+  "version": "0.6.2",
   "critical": false,
   "minimumSupportedVersion": "0.4.0",
-  "notes": "Compact chat with bottom composer, slash-command suggestions, smaller usage meters and dismissible settings."
+  "notes": "Close-chat button and local diagnostics/Complex Lab with expanded isolated Chromium and Firefox regression scenarios."
 }
