@@ -1,3 +1,4 @@
+import { installCommands } from './chat-commands.js';
 import { t, language } from './i18n.js';
 import { api as chrome } from './platform.js';
 const $ = (id) => document.getElementById(id);
@@ -62,7 +63,7 @@ $('composer').addEventListener('submit', async (event) => {
         if (command === '/clear') await historyAction('clear_history');
         else if (command === '/new') { if (taskState.activeTaskId) throw new Error(t('Сначала остановите текущую задачу.')); selectedId = '__new__'; render(); }
         else { if (!taskState.activeTaskId) throw new Error(t('Нет активной задачи')); await send({ type: 'chat_control', action: command === '/stop' ? 'cancel' : 'wake', taskId: taskState.activeTaskId }); }
-        $('prompt').value = ''; return;
+        $('prompt').value = ''; $('prompt').dispatchEvent(new Event('input')); return;
       }
       const prompts = { '/test': 'Пройди все этапы тестирования на этой странице и проверь результат.', '/summarize': 'Изучи страницу и кратко опиши её содержимое.', '/media': 'Используй browser_media для просмотра видео, аудио, субтитров и анимаций на странице. Сообщи, что удалось наблюдать.', '/screenshot': 'Сделай снимок текущей страницы и опиши видимое содержимое.' };
       if (!prompts[command]) throw new Error(t('Неизвестная команда')); text = t(prompts[command]);
@@ -76,7 +77,7 @@ $('composer').addEventListener('submit', async (event) => {
       const task = await send({ type: 'chat_start', tabId: context.tabId, text, mode: $('mode').value, handoff: $('handoff').checked, longRun: $('long-run').checked, maxHours: Number($('max-hours').value), model: $('model-select').value || undefined, effort: $('effort-select').value || undefined, language });
       if (task.policyUpdated) $('policy-feedback').textContent = `${task.domain}: ${task.mode === 'deny' ? 'доступ запрещён' : 'теперь требуется разрешение'}`; else selectedId = task.id;
     }
-    $('prompt').value = ''; taskState = await send({ type: 'chat_tasks' }); render();
+    $('prompt').value = ''; $('prompt').dispatchEvent(new Event('input')); taskState = await send({ type: 'chat_tasks' }); render();
   } catch (err) { error(err.message); } finally { $('send').disabled = false; }
 });
 $('wake').addEventListener('click', async () => { try { await send({ type: 'chat_control', action: 'wake', taskId: taskState.activeTaskId }); } catch (err) { error(err.message); } });
@@ -98,6 +99,33 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'tasks_update') { taskState = message.data; render(); }
   if (message.type === 'chat_target' && !taskState.activeTaskId) target(message.tabId).then(render).catch((err) => error(err.message));
 });
+const rail = $('control-rail');
+function settingsOpen(open) {
+  document.body.classList.toggle('controls-open', open); rail.hidden = !open;
+  $('settings-backdrop').hidden = !open; $('conversation').inert = open;
+  $('controls-toggle').setAttribute('aria-expanded', String(open));
+  if (open) $('controls-close').focus(); else $('controls-toggle').focus();
+}
+$('controls-toggle').onclick = () => settingsOpen(rail.hidden);
+$('controls-close').onclick = () => settingsOpen(false);
+$('settings-backdrop').onclick = () => settingsOpen(false);
+document.addEventListener('keydown', event => {
+  if (rail.hidden) return;
+  if (event.key === 'Escape') { event.preventDefault(); settingsOpen(false); }
+  if (event.key === 'Tab') {
+    const items = [...rail.querySelectorAll('button, a[href], input, select, summary')].filter(el => !el.disabled && el.getClientRects().length);
+    const first = items[0], last = items.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  }
+});
+const controls = document.createDocumentFragment();
+for (const selector of ['.account-card', '.target', '.settings-row', '.handoff', '#long-settings', '#mode-hint', '.profile-row label']) for (const element of document.querySelectorAll(selector)) controls.append(element);
+$('controls-close').parentElement.after(controls);
+$('composer').prepend($('composer-models'));
+
+installCommands($('prompt'), $('command-suggestions'), t);
+$('prompt').addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); $('composer').requestSubmit(); } });
 const pageTarget = Number(new URL(location.href).searchParams.get('tabId'));
 try { await target(Number.isSafeInteger(pageTarget) && pageTarget > 0 ? pageTarget : undefined); taskState = await send({ type: 'chat_tasks' }); render(); refreshAccount(); } catch (err) { error(err.message); render(); }
 setInterval(updateElapsed, 1000);
@@ -128,7 +156,8 @@ function windowLabel(minutes, key) {
 }
 function renderAccount(account, task) {
   const model = task?.model || account?.model;
-  $('profile-name').textContent = account?.profile?.name || t('Профиль недоступен');
+  $('profile-name').textContent = account?.profile?.name || '';
+  $('profile-name').hidden = !account?.profile?.name;
   if (account?.models?.length && JSON.stringify(account.models) !== $('model-select').dataset.catalog) {
     const current = $('model-select').value; $('model-select').replaceChildren(new Option(t('По умолчанию'), ''), ...account.models.map(item => new Option(item.name, item.model)));
     $('model-select').value = current; $('model-select').dataset.catalog = JSON.stringify(account.models); renderEfforts();
@@ -137,11 +166,15 @@ function renderAccount(account, task) {
   const percent = usage?.limit > 0 && Number.isFinite(usage.used) ? 100 * usage.used / usage.limit : null;
   $('context-meter').value = Math.min(100, percent || 0); $('context-meter').title = t('Расход по последнему запросу модели. Codex управляет сокращением контекста.');
   $('context-note').textContent = task?.compactedAt ? `${t('Контекст сокращён')} ${new Date(task.compactedAt).toLocaleTimeString(language)}` : percent >= 90 ? t('Контекст близок к пределу; Codex может выполнить сокращение.') : '';
-  $('context-label').textContent = percent === null ? t('Контекст: нет данных') : `${t('Контекст')}: ${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()} (${percent.toFixed(1)}%)`;
+  $('context-meter').parentElement.hidden = percent === null;
+  $('context-label').textContent = `${t('Контекст')} ${percent?.toFixed(0) || 0}%`;
+  $('context-meter').parentElement.title = percent === null ? '' : `${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()} · ${$('context-note').textContent}`;
   const bucket = account?.limits?.find(item => item.model === model) || account?.limits?.find(item => item.id === 'codex') || account?.limits?.[0];
   const five = bucket?.windows.find(item => item.durationMinutes === 300);
   $('five-hour-meter').value = five?.remainingPercent || 0;
-  $('five-hour-label').textContent = five ? `${t('Лимит за 5 часов')}: ${five.remainingPercent}% ${t('осталось')}${five.resetsAt ? ` · ${t('Обновится')} ${new Date(five.resetsAt * 1000).toLocaleTimeString(language)}` : ''}` : t('Лимит за 5 часов: нет данных');
+  $('five-hour-meter').parentElement.hidden = !five;
+  $('five-hour-label').textContent = five ? `${t('5 ч.')} · ${five.remainingPercent}%` : '';
+  $('five-hour-meter').parentElement.title = five ? `${t('Лимит за 5 часов')}: ${five.remainingPercent}% ${t('осталось')}${five.resetsAt ? ` · ${t('Обновится')} ${new Date(five.resetsAt * 1000).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}` : ''}` : '';
   $('model-label').textContent = task?.model ? 'МОДЕЛЬ ЗАДАЧИ' : 'МОДЕЛЬ В НАСТРОЙКАХ';
   $('model-name').textContent = model || 'Модель не указана';
   $('model-detail').textContent = [task?.effort || account?.effort ? `Рассуждение: ${task?.effort || account.effort}` : '', task?.modelReroutedFrom ? `Переключена с ${task.modelReroutedFrom}` : ''].filter(Boolean).join(' · ');
@@ -167,7 +200,7 @@ async function refreshAccount(force = false) {
 }
 $('refresh-account').addEventListener('click', () => refreshAccount(true));
 for (const button of document.querySelectorAll('[data-prompt]')) button.addEventListener('click', () => { $('prompt').value = button.dataset.prompt; $('prompt').focus(); });
-$('prompt').addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); $('composer').requestSubmit(); } });
+
 
 function renderTemporary(status) {
   const box = $('temporary-tabs'); if (!box) return; box.replaceChildren();
@@ -184,9 +217,3 @@ async function historyAction(action, extra = {}) { taskState = await send({ type
 $('clear-history').onclick = () => historyAction('clear_history').catch(err => error(err.message));
 $('delete-task').onclick = () => historyAction('delete', { taskId: displayedTask?.id }).catch(err => error(err.message));
 $('history-retention').onchange = () => historyAction('history_settings', { retention: $('history-retention').value }).catch(err => error(err.message));
-for (const button of document.querySelectorAll('[data-command]')) button.onclick = () => { $('prompt').value = button.dataset.command; $('composer').requestSubmit(); };
-// Keep the conversation primary; settings live on the side at wider widths.
-const rail = $('control-rail'); const controls = document.createDocumentFragment();
-$('controls-toggle').onclick = () => { const open = document.body.classList.toggle('controls-open'); $('controls-toggle').setAttribute('aria-expanded', String(open)); };
-for (const selector of ['.account-card', '.model-controls', '.target', '.settings-row', '.handoff', '#long-settings', '#mode-hint']) for (const element of document.querySelectorAll(selector)) controls.append(element);
-rail.prepend(controls);

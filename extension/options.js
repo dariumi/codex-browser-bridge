@@ -2,6 +2,10 @@ import './i18n.js';
 import { api as chrome } from './platform.js';
 const byId = (id) => document.getElementById(id);
 const report = (text, error = false) => { byId('status').textContent = text; byId('status').className = error ? 'error' : 'good'; };
+byId('close-settings').onclick = async () => {
+  try { const tab = await chrome.tabs.getCurrent(); if (tab?.id) await chrome.tabs.remove(tab.id); else window.close(); }
+  catch { window.close(); }
+};
 const saved = await chrome.storage.local.get(['url', 'token']);
 if (saved.url) byId('url').value = saved.url;
 if (saved.token) byId('token').value = saved.token;

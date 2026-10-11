@@ -1,6 +1,6 @@
 {
-  "version": "0.6.0",
+  "version": "0.6.1",
   "critical": false,
   "minimumSupportedVersion": "0.4.0",
-  "notes": "Private session history, model/effort controls, RU/EN chat, media observation, extension-only virtual microphone/camera/screen, resilient chat launcher and optional TLS remote bridge."
+  "notes": "Compact chat with bottom composer, slash-command suggestions, smaller usage meters and dismissible settings."
 }

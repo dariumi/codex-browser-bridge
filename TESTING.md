@@ -128,3 +128,13 @@ Date: 2026-10-11. Development session has a read-only original Git directory, re
 - GitHub description/homepage/topic changes were attempted through `gh` and rejected by unavailable network access. `npm run github:configure` contains the prepared official repository settings. No commit/push or GitHub configuration change is claimed.
 
 Extension-only virtual streams require explicit opt-in and advanced approval; they exist in the current document and do not imitate OS hardware identity or capture the real desktop. Actual browser MediaRecorder/WebRTC integration remains unverified. Optional native devices are Linux-only, require explicit extension opt-in and separate advanced consent, and need browser-local ffmpeg/PulseAudio/PipeWire or a user-configured virtual camera. Screen picker consent is never bypassed. Audio resources do not imply transcription or model audio support. Account profile names remain unavailable when app-server does not provide them. Context and five-hour allowance display unavailable instead of fabricated estimates.
+
+
+## Working update 0.6.1
+
+Date: 2026-10-11. Compact conversation UI: scrollable messages with a bottom composer, inline model/effort selectors, thin usage meters (unavailable data hidden), slash-only command suggestions and dismissible settings. Both sidebar settings and the separate options page have explicit close buttons. Sidebar Escape/backdrop dismissal and keyboard focus containment are implemented.
+
+- Source validation ran in the separate `/tmp` worktree. Syntax/manifests, packaging and Firefox lint pass; the existing one `DANGEROUS_EVAL` warning remains.
+- Two new command tests validate prefix filtering, keyboard/click selection without executing tasks, Escape/submission dismissal and leaving ordinary text alone. All 57 independent tests pass.
+- Full `npm test` still fails in app-server, broker and MCP integration files under the environment restrictions previously recorded. Both browser suites were attempted and fail at loopback creation (`listen EPERM`). Live layout, scrolling, keyboard focus and browser settings-page closing are not claimed as verified.
+- Versions agree at 0.6.1 across both manifests, package/lockfile, update metadata and bridge clients. Update classification remains non-critical. Prepared archives are under ignored `dist/`; no private configuration or history is included.

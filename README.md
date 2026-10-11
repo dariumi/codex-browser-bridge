@@ -218,3 +218,5 @@ Quick commands: `/new`, `/clear`, `/stop`, `/wake`, `/test`, `/summarize`, `/med
 [Remote server connection](docs/REMOTE.md) supports SSH forwarding and an optional TLS-only WebSocket gateway. [Virtual devices](docs/DEVICES.md) use page-scoped Web Audio/canvas streams without drivers: test microphone, camera and synthetic screen. Linux OS devices optionally use a separately installed native host. These streams do not claim physical hardware identity or capture the real desktop.
 
 Maintainers can run `npm run github:configure` to set repository description, homepage and search topics. Topics improve discoverability; search ranking is controlled by GitHub.
+
+Version 0.6.1 keeps the composer at the bottom and model/effort controls compact. Type `/` for command suggestions (arrows, Enter/Tab to select, Escape to dismiss); selecting a suggestion does not execute it. Settings close with ✕, Escape or a click outside. Usage details are in tooltips and settings; unavailable meters are hidden.

@@ -1,7 +1,13 @@
 const api = globalThis.browser || globalThis.chrome;
 const saved = await api.storage.local.get('language');
 export const language = saved.language === 'ru' || saved.language === 'en' ? saved.language : (navigator.language.toLowerCase().startsWith('ru') ? 'ru' : 'en');
-const pairs = `Виртуальные устройства через API страницы|Virtual devices through page APIs
+const pairs = `Закрыть настройки|Close settings
+Команды|Commands
+Новая задача|New task
+Просмотреть медиа|View media
+Снимок страницы|Page screenshot
+5 ч.|5h
+Виртуальные устройства через API страницы|Virtual devices through page APIs
 Микрофон, камера и тестовая демонстрация экрана без установки драйверов. Только текущая страница и отдельное разрешение.|Microphone, camera and test screen sharing without drivers. Current page only; separate approval required.
 Виртуальные устройства на этой странице|Virtual devices on this page
 Расширение подаёт тестовый микрофон, камеру и экран через API страницы. Системные драйверы не нужны. Требуется отдельное разрешение JavaScript/CDP.|The extension supplies a test microphone, camera and screen through page APIs. No system drivers required. Separate JavaScript/CDP permission is required.

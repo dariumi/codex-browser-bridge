@@ -162,3 +162,5 @@ History defaults to Session only. Ordinary chat tasks use ephemeral threads. Ena
 Quick commands: `/new`, `/clear`, `/stop`, `/wake`, `/test`, `/summarize`, `/media`, `/screenshot`. Remote servers: [REMOTE.md](REMOTE.md). Page-scoped virtual media without drivers and optional Linux OS devices: [DEVICES.md](DEVICES.md). Rebuild/reload both bridge and extension together after updating; new nativeMessaging permission is required for optional device support.
 
 If opening the sidebar is rejected by the browser, Chat opens in a separate extension tab and retains the original target page. The floating launcher is restored after DOM replacement and reinjected on navigation/reload. Browser internal pages and extension stores may prohibit content scripts; use the toolbar Chat button there.
+
+Version 0.6.1 keeps the composer at the bottom and model/effort controls compact. Type `/` for command suggestions (arrows, Enter/Tab to select, Escape to dismiss); selecting a suggestion does not execute it. Settings close with ✕, Escape or a click outside. Usage details are in tooltips and settings; unavailable meters are hidden.
