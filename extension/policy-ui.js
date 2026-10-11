@@ -1,3 +1,4 @@
+import './i18n.js';
 import { api } from './platform.js';
 let current;
 async function send(message) { const result = await api.runtime.sendMessage(message); if (result?.error) throw new Error(result.error); return result; }

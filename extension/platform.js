@@ -9,7 +9,16 @@ export function capabilities(browserApi = api) {
 }
 // Call synchronously from the message handler to retain Firefox's user gesture.
 export function openChat(tabId, browserApi = api) {
-  if (browserApi.sidePanel) return browserApi.sidePanel.open({ tabId });
-  if (browserApi.sidebarAction) return browserApi.sidebarAction.open();
-  return Promise.reject(new Error('Боковая панель недоступна в этом браузере.'));
+  try {
+    if (browserApi.sidePanel) return Promise.resolve(browserApi.sidePanel.open({ tabId }));
+    if (browserApi.sidebarAction) return Promise.resolve(browserApi.sidebarAction.open());
+    return Promise.reject(new Error('Боковая панель недоступна в этом браузере.'));
+  } catch (error) { return Promise.reject(error); }
+}
+export async function openChatPage(tabId, browserApi = api) {
+  const base = browserApi.runtime.getURL('chat.html');
+  const url = `${base}?tabId=${encodeURIComponent(tabId)}`;
+  const existing = (await browserApi.tabs.query({})).find(tab => tab.url?.split('?')[0] === base);
+  if (existing) return browserApi.tabs.update(existing.id, { url, active: true });
+  return browserApi.tabs.create({ url, active: true });
 }

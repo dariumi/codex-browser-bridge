@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Codex Browser Bridge",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Connect your existing browser tabs to your local Codex MCP server.",
   "permissions": [
     "tabs",
@@ -11,7 +11,8 @@
     "notifications",
     "scripting",
     "declarativeNetRequestWithHostAccess",
-    "webNavigation"
+    "webNavigation",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -60,7 +61,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src ws://127.0.0.1:* ws://localhost:*"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src ws://127.0.0.1:* ws://localhost:* wss:"
   },
   "sidebar_action": {
     "default_title": "Codex",

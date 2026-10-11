@@ -16,3 +16,8 @@ const firefox = JSON.parse(await readFile(new URL('../extension/manifest.firefox
 if (firefox.version !== manifest.version || firefox.background.service_worker || firefox.permissions.includes('debugger')) throw new Error('Invalid Firefox manifest');
 for (const file of [...firefox.background.scripts, firefox.sidebar_action.default_panel]) await readFile(new URL(`../extension/${file}`, import.meta.url));
 console.log('Firefox manifest: OK');
+
+const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url)));
+const release = JSON.parse(await readFile(new URL('../update.json', import.meta.url)));
+if (pkg.version !== manifest.version || release.version !== pkg.version || typeof release.critical !== 'boolean') throw new Error('Package, browser manifests and update metadata must agree');
+console.log('Release versions: OK');

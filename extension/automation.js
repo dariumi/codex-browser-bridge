@@ -1,3 +1,4 @@
+import { mediaPageCommand } from './media-page.js';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const supportedUrl = (url) => /^(https?:|file:|about:blank)/.test(url || '');
 
@@ -257,6 +258,7 @@ export class BrowserAutomation {
         await sleep(120); return this.evaluate(tabId, '({scrollX,scrollY})');
       }
       case 'mouse': { const { tabId: ignored, ...params } = args; await this.cdp(tabId, 'Input.dispatchMouseEvent', { ...params, clickCount: args.type === 'mouseMoved' ? 0 : 1 }); return { dispatched: true }; }
+      case 'media': { const reply = await this.evaluate(tabId, `(${mediaPageCommand.toString()})(${JSON.stringify(args.action)}, ${JSON.stringify(args)})`); if (reply.error) throw new Error(reply.error); return reply.value; }
       case 'drag': {
         // Resolve both endpoints first, then resolve the source again after target scrolling.
         await this.point(tabId, args.to);

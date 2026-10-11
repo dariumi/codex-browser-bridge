@@ -16,7 +16,7 @@ export async function firefoxPageCommand(action, args) {
       if (!el?.isConnected) throw new Error('Element ref is stale or target missing. Refresh browser_snapshot.');
       return el;
     };
-    const point = (target) => { if (target.x !== undefined) return { x: target.x, y: target.y }; const el = resolve(target); el.scrollIntoView({ block: 'center', inline: 'nearest' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+    const point = (target, scroll = true) => { if (target.x !== undefined) return { x: target.x, y: target.y }; const el = resolve(target); if (scroll) el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
     const mouse = (el, type, p, extra = {}) => el.dispatchEvent(new MouseEvent(type, { bubbles: true, composed: true, cancelable: true, clientX: p.x, clientY: p.y, view: window, ...extra }));
     const pointer = (el, type, p, buttons = 0) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, composed: true, cancelable: true, clientX: p.x, clientY: p.y, pointerId: 1, pointerType: 'mouse', isPrimary: true, buttons }));
     const setText = (el, text) => {
@@ -78,13 +78,26 @@ export async function firefoxPageCommand(action, args) {
       el.dispatchEvent(new KeyboardEvent('keyup', init)); value = { pressed: args.key, trustedInput: false };
     } else if (action === 'scroll') { const el = args.x === undefined ? null : document.elementFromPoint(args.x, args.y); let scroller = el; while (scroller && scroller !== document.body && scroller.scrollHeight <= scroller.clientHeight) scroller = scroller.parentElement; if (scroller && scroller !== document.body) scroller.scrollBy(args.deltaX || 0, args.deltaY); else window.scrollBy(args.deltaX || 0, args.deltaY); value = { scrollX, scrollY }; }
     else if (action === 'drag') {
-      const from = point(args.from), to = point(args.to), source = resolve(args.from), dest = resolve(args.to), data = new DataTransfer();
-      const drag = (el, type, p) => el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, clientX: p.x, clientY: p.y, dataTransfer: data }));
+      // Resolve both endpoints in the same viewport and allow layouts to react between moves.
+      point(args.to); const from = point(args.from), to = point(args.to, false), source = resolve(args.from), dest = resolve(args.to), data = new DataTransfer();
+      if ([from, to].some(p => p.x < 0 || p.y < 0 || p.x >= innerWidth || p.y >= innerHeight)) throw new Error('Drag endpoints must be visible together. Scroll or use viewport coordinates.');
+      const drag = (el, type, p) => el.dispatchEvent(new DragEvent(type, { bubbles: true, composed: true, cancelable: true, clientX: p.x, clientY: p.y, dataTransfer: data }));
+      let last = source, released = false;
       pointer(source, 'pointerdown', from, 1); mouse(source, 'mousedown', from, { buttons: 1 });
-      if (source.draggable) drag(source, 'dragstart', from);
-      for (let i = 1; i <= (args.steps || 20); i++) { const p = { x: from.x + (to.x - from.x) * i / (args.steps || 20), y: from.y + (to.y - from.y) * i / (args.steps || 20) }; pointer(source, 'pointermove', p, 1); mouse(source, 'mousemove', p, { buttons: 1 }); }
-      if (source.draggable) { drag(dest, 'dragenter', to); drag(dest, 'dragover', to); drag(dest, 'drop', to); drag(source, 'dragend', to); }
-      pointer(source, 'pointerup', to); mouse(source, 'mouseup', to); value = { dragged: true, trustedInput: false };
+      try {
+        if (source.draggable) drag(source, 'dragstart', from);
+        for (let i = 1; i <= (args.steps || 20); i++) {
+          const p = { x: from.x + (to.x - from.x) * i / (args.steps || 20), y: from.y + (to.y - from.y) * i / (args.steps || 20) };
+          const hit = source.hasPointerCapture?.(1) ? source : document.elementFromPoint(p.x, p.y) || source;
+          if (hit !== last) { mouse(last, 'mouseout', p, { relatedTarget: hit, buttons: 1 }); mouse(hit, 'mouseover', p, { relatedTarget: last, buttons: 1 }); if (source.draggable) { drag(last, 'dragleave', p); drag(hit, 'dragenter', p); } }
+          pointer(hit, 'pointermove', p, 1); mouse(hit, 'mousemove', p, { buttons: 1 });
+          if (source.draggable) { drag(source, 'drag', p); drag(hit, 'dragover', p); } last = hit;
+          await new Promise(resolve => setTimeout(resolve, 16));
+        }
+        if (source.draggable) { drag(dest, 'drop', to); drag(source, 'dragend', to); }
+        pointer(last, 'pointerup', to); mouse(last, 'mouseup', to); released = true;
+        value = { dragged: true, trustedInput: false, from, to, verificationRequired: true };
+      } finally { if (!released) { pointer(source, 'pointercancel', to); mouse(source, 'mouseup', to); } }
     } else if (action === 'mouse') { const el = resolve(args), p = point(args); const type = { mouseMoved: 'mousemove', mousePressed: 'mousedown', mouseReleased: 'mouseup' }[args.type]; mouse(el, type, p, { buttons: args.buttons || 0, button: { left: 0, middle: 1, right: 2 }[args.button] ?? 0 }); pointer(el, { mousemove: 'pointermove', mousedown: 'pointerdown', mouseup: 'pointerup' }[type], p, args.buttons || 0); value = { dispatched: true, trustedInput: false }; }
     else if (action === 'condition') {
       const matches = args.selector ? all(args.selector) : [];

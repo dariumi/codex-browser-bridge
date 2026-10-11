@@ -1,4 +1,6 @@
-import { api as chrome, capabilities, openChat } from './platform.js';
+import { VirtualDevices } from './virtual-devices.js';
+import { DeviceBridge } from './native-devices.js';
+import { api as chrome, capabilities, openChat, openChatPage } from './platform.js';
 import { FirefoxAutomation } from './firefox-automation.js';
 import { BrowserAutomation } from './automation.js';
 import { BrowserWorkspace } from './workspace.js';
@@ -25,21 +27,25 @@ function uiRequest(action, args = {}) {
 }
 const policy = new AccessPolicy(chrome, {
   scope: () => tasksState.activeTaskId || 'manual',
-  changed: data => broadcast({ type: 'policy_update', data }),
+  changed: data => { devices?.disconnect(); virtualDevices?.disconnect(); broadcast({ type: 'policy_update', data }); },
   event: event => {
     if (socket?.readyState === WebSocket.OPEN && state.connected) socket.send(JSON.stringify({ type: 'permission_event', event }));
     if (event.type === 'pending') chrome.notifications.create(`access-${event.request.id}`, { type: 'basic', iconUrl: 'assets/avatar-128.png', title: 'Codex запрашивает разрешение', message: `${event.request.host} · ${event.request.kind === 'advanced' ? 'JavaScript / CDP' : event.request.reason}. Решение доступно в чате расширения.` }).catch(() => {});
   }
 });
+const devices = new DeviceBridge(chrome, policy);
+const virtualDevices = new VirtualDevices(chrome, policy);
 const guard = new CommandGuard(chrome, automation, workspace, policy);
 async function browserCommand(action, args, validate) {
+  if (action === 'devices') { validate(); await policy.ready; const tab = await guard.target(args.tabId, 'devices'); const result = await (args.backend === 'native' ? devices : virtualDevices).run(args, tab); validate(); return result; }
+  if (action === 'workspace' && ['finish', 'release_all'].includes(args.action)) { devices.disconnect(); await virtualDevices.disconnect(); }
   const result = await guard.run(action, args, validate);
   return action === 'extension_command' && result === null ? extensionCommand(chrome, args) : result;
 }
 const badge = (text, color) => { chrome.action.setBadgeText({ text }); chrome.action.setBadgeBackgroundColor({ color }); };
 const validate = (settings) => {
   const url = new URL(settings.url);
-  if (url.protocol !== 'ws:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || url.pathname !== '/extension' || url.search || url.username || url.password || url.hash) throw new Error('Use ws://127.0.0.1:PORT/extension');
+  if (!['ws:', 'wss:'].includes(url.protocol) || url.protocol === 'ws:' && !['127.0.0.1', 'localhost'].includes(url.hostname) || url.pathname !== '/extension' || url.search || url.username || url.password || url.hash) throw new Error('Use local ws://127.0.0.1:PORT/extension or secure wss://HOST/extension');
   if (!/^[a-f0-9]{64}$/.test(settings.token)) throw new Error('Invalid connection key');
 };
 
@@ -104,7 +110,7 @@ async function disconnect() {
   if (ws) ws.close();
   for (const pending of uiPending.values()) { clearTimeout(pending.timer); pending.reject(new Error('Соединение отключено.')); } uiPending.clear();
   state.connected = false;
-  await automation.detachAll();
+  devices.disconnect(); await virtualDevices.disconnect(); await automation.detachAll();
   await workspace.releaseAll(); await policy.reset();
   badge('', '#8b6470');
 }
@@ -113,7 +119,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (sender.id !== chrome.runtime.id) return;
   if (message.type === 'open_chat' && sender.tab?.id) {
     chatTabId = sender.tab.id; chrome.storage.session.set({ chatTabId });
-    openChat(sender.tab.id, chrome).then(() => { broadcast({ type: 'chat_target', tabId: sender.tab.id }); respond({ ok: true }); }).catch((error) => respond({ error: error.message }));
+    openChat(sender.tab.id, chrome).catch(() => openChatPage(sender.tab.id, chrome)).then(() => { broadcast({ type: 'chat_target', tabId: sender.tab.id }); respond({ ok: true }); }).catch((error) => respond({ error: error.message }));
     return true;
   }
   if (message.type === 'page_ready' && sender.tab?.id) {
@@ -132,6 +138,10 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       if (!['release_all', 'collapse', 'merge', 'cleanup', 'keep'].includes(message.action)) throw new Error('Invalid workspace control');
       return browserCommand('workspace', { action: message.action, tabId: message.tabId });
     }
+    if (message.type === 'chat_target_set') {
+      const tab = await automation.tab(message.tabId); chatTabId = tab.id;
+      await chrome.storage.session.set({ chatTabId }); broadcast({ type: 'chat_target', tabId: chatTabId }); return { ok: true };
+    }
     if (message.type === 'chat_context') {
       const tab = await automation.tab(message.tabId || chatTabId);
       return { tabId: tab.id, title: tab.title, url: tab.url, connected: state.connected };
@@ -141,6 +151,11 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       if (!['status', 'check', 'apply', 'configure'].includes(message.action)) throw new Error('Invalid update action');
       return uiRequest('updates_' + message.action, { policy: message.policy });
     }
+    if (message.type === 'chat_history') {
+      if (!['delete', 'clear_history', 'history_settings'].includes(message.action)) throw new Error('Invalid history action');
+      tasksState = await uiRequest(message.action, { taskId: message.taskId, retention: message.retention });
+      broadcast({ type: 'tasks_update', data: tasksState }); return tasksState;
+    }
     if (message.type === 'chat_tasks') { tasksState = await uiRequest('list'); return tasksState; }
     if (message.type === 'chat_start') {
       const tab = await automation.tab(message.tabId || chatTabId);
@@ -148,7 +163,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       const rule = policyInstruction(message.text, tab.url);
       if (rule) return { policyUpdated: true, ...await policy.setRule(rule.domain, rule.mode) };
       await policy.ensure(tab.url, 'chat_start');
-      return uiRequest('start', { text: message.text, tabId: tab.id, title: tab.title, url: tab.url, mode: message.mode, handoff: message.handoff, longRun: message.longRun, maxHours: message.maxHours });
+      return uiRequest('start', { text: message.text, tabId: tab.id, title: tab.title, url: tab.url, mode: message.mode, handoff: message.handoff, longRun: message.longRun, maxHours: message.maxHours, model: message.model, effort: message.effort, language: message.language });
     }
     if (message.type === 'chat_control') {
       if (!['cancel', 'steer', 'wake'].includes(message.action)) throw new Error('Invalid task control');
@@ -161,10 +176,13 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       return uiRequest(message.action, { taskId: message.taskId, text: message.text });
     }
     if (message.type === 'open_chat') {
-      const opening = chrome.sidebarAction ? openChat(null, chrome) : null;
+      const opening = chrome.sidebarAction ? openChat(null, chrome).then(() => true, () => false) : null;
       const tab = await automation.tab(); chatTabId = tab.id; await chrome.storage.session.set({ chatTabId });
-      await (opening || openChat(tab.id, chrome)); return { ok: true };
+      if (opening) { if (!await opening) await openChatPage(tab.id, chrome); }
+      else await openChat(tab.id, chrome).catch(() => openChatPage(tab.id, chrome)); return { ok: true };
     }
+    if (message.type === 'virtual_config') { await chrome.storage.local.set({ virtualDevicesEnabled: message.enabled === true }); if (!message.enabled) await virtualDevices.disconnect(); return { ok: true }; }
+    if (message.type === 'native_config') { await chrome.storage.local.set({ nativeDevicesEnabled: message.enabled === true }); if (!message.enabled) devices.disconnect(); return { ok: true }; }
     if (message.type === 'configure') {
       validate(message.settings);
       await chrome.storage.local.set({ url: message.settings.url, token: message.settings.token, enabled: true });
@@ -180,18 +198,24 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   })().then(respond).catch((error) => respond({ error: error.message }));
   return true;
 });
-chrome.notifications.onClicked.addListener(async () => {
-  if (chrome.sidebarAction) { openChat(null, chrome).catch(() => {}); return; }
-  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (tabs[0]) openChat(tabs[0].id, chrome).catch(() => {});
+chrome.notifications.onClicked.addListener(() => {
+  const opening = openChat(chatTabId, chrome);
+  opening.catch(async () => { const tab = await automation.tab(chatTabId); await openChatPage(tab.id, chrome); }).catch(() => {});
 });
-chrome.runtime.onInstalled.addListener(async () => {
-  chrome.alarms.create('reconnect', { periodInMinutes: 0.5 }); connect();
+async function injectLaunchers() {
+  if (!chrome.tabs.query) return;
   for (const tab of await chrome.tabs.query({})) if (/^https?:/.test(tab.url || '')) {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] }).catch(() => {});
   }
+}
+chrome.tabs.onUpdated?.addListener((tabId, change, tab) => {
+  if (change.status === 'complete' && /^https?:/.test(tab.url || '')) chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }).catch(() => {});
 });
-chrome.runtime.onStartup.addListener(() => { chrome.alarms.create('reconnect', { periodInMinutes: 0.5 }); connect(); });
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create('reconnect', { periodInMinutes: 0.5 }); connect(); injectLaunchers().catch(() => {});
+});
+chrome.runtime.onStartup.addListener(() => { chrome.alarms.create('reconnect', { periodInMinutes: 0.5 }); connect(); injectLaunchers().catch(() => {}); });
+injectLaunchers().catch(() => {});
 chrome.alarms.onAlarm.addListener(({ name }) => { if (name === 'reconnect' && !socket) connect(); if (name === 'access_expiry') policy.sync().catch(() => {}); });
 connect();
 

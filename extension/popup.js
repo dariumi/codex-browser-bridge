@@ -1,4 +1,5 @@
-import { api as chrome } from './platform.js';
+import './i18n.js';
+import { api as chrome, openChat, openChatPage } from './platform.js';
 let enabled = false;
 async function refresh() {
   const state = await chrome.runtime.sendMessage({ type: 'status' });
@@ -8,7 +9,19 @@ async function refresh() {
 }
 document.getElementById('toggle').addEventListener('click', async () => { await chrome.runtime.sendMessage({ type: 'toggle', enabled: !enabled }); await refresh(); });
 document.getElementById('settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
-document.getElementById('chat').addEventListener('click', async () => { const reply = await chrome.runtime.sendMessage({ type: 'open_chat' }); if (reply.error) document.getElementById('status').textContent = reply.error; else window.close(); });
+const chatButton = document.getElementById('chat');
+let targetTab;
+chatButton.disabled = true;
+chrome.tabs.query({ active: true, currentWindow: true }).then(tabs => { targetTab = tabs[0]; chatButton.disabled = !targetTab; }).catch(error => { document.getElementById('status').textContent = error.message; });
+chatButton.addEventListener('click', () => {
+  // Invoke in the click handler, before messaging or any await loses user activation.
+  const opening = openChat(targetTab.id, chrome);
+  chatButton.disabled = true;
+  const saving = chrome.runtime.sendMessage({ type: 'chat_target_set', tabId: targetTab.id }).then(reply => { if (reply?.error) throw new Error(reply.error); });
+  Promise.all([saving, opening.catch(() => openChatPage(targetTab.id, chrome))]).then(() => window.close()).catch(error => {
+    document.getElementById('status').textContent = error.message; chatButton.disabled = false;
+  });
+});
 await refresh(); setInterval(refresh, 1500);
 
 try {

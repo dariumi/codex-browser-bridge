@@ -31,7 +31,7 @@ test('real stdio MCP initialization, schemas, JSON errors, and image output', as
   t.after(() => client.close());
   await client.connect(transport);
   const list = await client.listTools();
-  assert.equal(list.tools.length, 33);
+  assert.equal(list.tools.length, 35);
   assert.ok(list.tools.some(tool => tool.name === 'browser_updates'));
   assert.ok(list.tools.some((tool) => tool.name === 'browser_drag'));
   assert.match(client.getInstructions(), /screenshot viewport CSS coordinates/);

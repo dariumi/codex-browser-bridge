@@ -101,7 +101,7 @@ Settings offer **Critical only** (default), **Manual**, and **All official updat
 
 A release is critical if the maintainer marks `update.json` critical, or your version is older than its minimum supported version. A release's version must match its package version. Only the official repository's `main` branch is fetched; MCP cannot replace the update source or change the automatic-update policy.
 
-Updates wait until active/sleeping tasks finish, require a clean `main` checkout and a fast-forward, and run dependency installation, syntax checks, tests and packaging in a separate Git worktree **before** changing your project. After installation the bridge reloads the extension and restarts. Private keys and ignored local history are retained. Install failures roll back the updater's own changes only while the tracked checkout is still clean; otherwise the error includes the recovery commit without overwriting local edits.
+Updates wait until active/sleeping tasks finish, require a clean `main` checkout and a fast-forward, and run dependency installation, syntax checks, tests and packaging in a separate Git worktree **before** changing your project. After installation the bridge reloads the extension and restarts. Private keys and settings are retained; history follows the selected privacy policy. On first 0.6 startup, old bridge history remains in memory for that session and ordinary records are removed from the disk file unless persistence was enabled. Install failures roll back the updater's own changes only while the tracked checkout is still clean; otherwise the error includes the recovery commit without overwriting local edits.
 
 For this first upgrade from an older version without the update mechanism:
 
@@ -152,3 +152,13 @@ The stdio MCP entry point is **server/mcp.js**, not server/daemon.js. See the [o
 | Unavailable Firefox action | Use a supported DOM action; native input/CDP/upload/dialog/console/network are unavailable. |
 
 For a browser on another machine, forward the bridge with an SSH tunnel, securely copy the connection file, and install the extension there. Automatic source updates on the Codex machine cannot replace files on a separate browser machine: transfer the updated browser package and reload it there. Upload file paths refer to the browser machine. Never share or commit the private connection file.
+
+## Chat controls and privacy (0.6+)
+
+Open chat controls to choose a model/reasoning effort from Codex's catalog and switch language (system/RU/EN). Changes apply to the next task. On narrow sidebars use the Settings button; wider windows show the side rail. Under the composer, context and the five-hour allowance show actual app-server data or unavailable. The five-hour percentage is not a duration of remaining working time.
+
+History defaults to Session only. Ordinary chat tasks use ephemeral threads. Enable On disk only if you want persistent local history. Delete the selected finished task or all finished tasks from controls; active tasks are protected. Saved owned Codex threads are also deleted when app-server allows it, with errors displayed. Sleeping tasks temporarily save private resume state; old external Codex records are not automatically purged.
+
+Quick commands: `/new`, `/clear`, `/stop`, `/wake`, `/test`, `/summarize`, `/media`, `/screenshot`. Remote servers: [REMOTE.md](REMOTE.md). Page-scoped virtual media without drivers and optional Linux OS devices: [DEVICES.md](DEVICES.md). Rebuild/reload both bridge and extension together after updating; new nativeMessaging permission is required for optional device support.
+
+If opening the sidebar is rejected by the browser, Chat opens in a separate extension tab and retains the original target page. The floating launcher is restored after DOM replacement and reinjected on navigation/reload. Browser internal pages and extension stores may prohibit content scripts; use the toolbar Chat button there.

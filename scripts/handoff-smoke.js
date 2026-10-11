@@ -11,7 +11,7 @@ const longRun = process.argv.includes('--long');
 const result = { date: new Date().toISOString(), passed: false };
 try {
   const status = await bridgeRequest('/status');
-  if (!status.connected || status.extensionVersion !== '0.5.0') throw new Error('Reload the installed extension to version 0.5.0 first.');
+  if (!status.connected || status.extensionVersion !== '0.6.0') throw new Error('Reload the installed extension to version 0.6.0 first.');
   fixture = await startFixture(17864);
   tabId = (await command('new_tab', { url: fixture.url, active: true })).tabId;
   const task = await command('task', { action: 'start', tabId, mode: 'browser', handoff: true, longRun, maxHours: 1,

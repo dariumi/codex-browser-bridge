@@ -56,7 +56,7 @@ Temporary add-ons must be loaded again after restarting Firefox. Permanent insta
 
 ### Updating
 
-Reload the extension after updating its files. Accept the new browser permissions if prompted, and verify version **0.5.0**. The connection key and saved access rules are retained. Restart the local bridge to load server changes, and restart the Codex MCP client to discover new tools. For Firefox, rebuild and reload the add-on from `dist/firefox`.
+Reload the extension after updating its files. Accept the new browser permissions if prompted, and verify version **0.6.0**. The connection key and saved access rules are retained. Restart the local bridge to load server changes, and restart the Codex MCP client to discover new tools. For Firefox, rebuild and reload the add-on from `dist/firefox`.
 
 Verify your setup:
 
@@ -127,7 +127,7 @@ New abilities are added as source handlers and applied by reloading. MCP cannot 
 
 ## MCP tools
 
-33 tools:
+35 tools:
 
 | Purpose | Tools |
 | --- | --- |
@@ -139,6 +139,7 @@ New abilities are added as source handlers and applied by reloading. MCP cannot 
 | Waiting and dialogs | `browser_wait`, `browser_dialog` |
 | Diagnostics | `browser_evaluate`, `browser_console`, `browser_network`, `browser_downloads` |
 | Advanced actions | `browser_cdp`, `browser_detach` |
+| Media and virtual devices | `browser_media`, `browser_devices` |
 | Updates, policy, chat and development | `browser_updates`, `browser_policy`, `browser_workspace`, `browser_task`, `browser_extension_command`, `browser_development` |
 
 Recommended flow: status → tabs → explicit `tabId` → snapshot/screenshot → action → verification. Never work around an approval-required or denied result.
@@ -205,3 +206,15 @@ Use `npm run bridge` for foreground operation. To stop an existing bridge, find 
 - **Secrets:** never publish `.local/connection.json`. Anyone with its key and access to the bridge can control the connected browser, subject to extension policy. Website origins are rejected, HTTP Host is validated, and authentication is mandatory.
 
 For a browser on another machine, forward the bridge from that machine with `ssh -N -L 17863:127.0.0.1:17863 user@codex-host`, securely transfer the connection file and ensure upload files exist there. Installed-browser smoke tests also need port 17864 forwarded.
+
+## Version 0.6: private chat, media and remote control
+
+Session-only history is the default: ordinary tasks use ephemeral Codex threads and do not write chat messages to bridge history. Enable disk retention explicitly, or delete selected/finished tasks from chat controls. Saved bridge-owned Codex threads are deleted through app-server when possible; failures are displayed. Sleeping tasks temporarily persist the data required to resume. Old external Codex records are not purged automatically.
+
+The conversation is primary, with a settings rail on wide screens and a controls drawer in narrow sidebars. RU/EN follows the system language or your choice. Available model/reasoning choices come from app-server; selections apply to the next task. Context usage comes from token-usage notifications, and the 5-hour bar reports the account allowance, not a guessed number of minutes. Profile names show only when the provider supplies them; email/IDs are excluded.
+
+Quick commands: `/new`, `/clear`, `/stop`, `/wake`, `/test`, `/summarize`, `/media`, `/screenshot`. `browser_media` inspects playback, active captions and animations, controls media, captures video frames and short page audio. Cross-origin/DRM/autoplay and client audio support can limit observation; waiting alone is never proof of viewing. Firefox synthetic gestures now dispatch along the hit-tested path with frame delays; pages requiring trusted input still need Chromium or manual interaction.
+
+[Remote server connection](docs/REMOTE.md) supports SSH forwarding and an optional TLS-only WebSocket gateway. [Virtual devices](docs/DEVICES.md) use page-scoped Web Audio/canvas streams without drivers: test microphone, camera and synthetic screen. Linux OS devices optionally use a separately installed native host. These streams do not claim physical hardware identity or capture the real desktop.
+
+Maintainers can run `npm run github:configure` to set repository description, homepage and search topics. Topics improve discoverability; search ranking is controlled by GitHub.

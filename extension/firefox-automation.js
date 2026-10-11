@@ -1,3 +1,4 @@
+import { mediaPageCommand } from './media-page.js';
 import { firefoxPageCommand } from './firefox-page.js';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export class FirefoxAutomation {
@@ -48,6 +49,7 @@ export class FirefoxAutomation {
     await this.workspace.mark(tabId); this.attached.add(tabId);
     if (action === 'navigate') { if (!/^https?:\/\//.test(args.url)) throw new Error('Only HTTP(S) URLs can be opened'); return this.navigateWait(tabId, () => api.tabs.update(tabId, { url: args.url })); }
     if (action === 'history') { return this.navigateWait(tabId, () => args.direction === 'reload' ? api.tabs.reload(tabId) : args.direction === 'back' ? api.tabs.goBack(tabId) : api.tabs.goForward(tabId)); }
+    if (action === 'media') { const [{ result } = {}] = await api.scripting.executeScript({ target: { tabId }, func: mediaPageCommand, args: [args.action, args] }); if (result?.error) throw new Error(result.error); return result?.value; }
     if (action === 'evaluate') {
       const [{ result, error } = {}] = await api.scripting.executeScript({ target: { tabId }, world: 'MAIN', func: async (expression) => {
         try { return { value: await (0, eval)(expression) }; } catch (error) { return { error: error.message }; }

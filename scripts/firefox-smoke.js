@@ -24,7 +24,7 @@ try {
   while (!broker.status().connected && Date.now() < deadline) await new Promise(r => setTimeout(r, 200));
   assert.equal(broker.status().connected, true, 'Firefox extension did not authenticate'); assert.equal(broker.status().browser, 'firefox');
   await writeFile(connectionPath, JSON.stringify({ port: broker.port, token }), { mode: 0o600 });
-  client = new Client({ name: 'firefox-smoke', version: '0.5.0' });
+  client = new Client({ name: 'firefox-smoke', version: '0.6.0' });
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.resolve('server/mcp.js')], env: { ...process.env, BROWSER_BRIDGE_CONFIG: connectionPath }, stderr: 'inherit' }));
   const call = async (action, args = {}) => {
     const reply = await client.callTool({ name: `browser_${action}`, arguments: { ...(tabId ? { tabId } : {}), ...args } });

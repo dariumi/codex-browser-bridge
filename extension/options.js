@@ -1,3 +1,4 @@
+import './i18n.js';
 import { api as chrome } from './platform.js';
 const byId = (id) => document.getElementById(id);
 const report = (text, error = false) => { byId('status').textContent = text; byId('status').className = error ? 'error' : 'good'; };
@@ -27,3 +28,7 @@ setInterval(async () => {
   const state = await chrome.runtime.sendMessage({ type: 'status' });
   report(state.connected ? `Подключено. Вкладок под управлением: ${state.attachedTabs.length}` : state.error || (state.enabled ? 'Ожидание локального моста…' : 'Управление отключено.'), !!state.error);
 }, 1500);
+
+const deviceSettings = await chrome.storage.local.get('nativeDevicesEnabled'); byId('native-devices').checked = deviceSettings.nativeDevicesEnabled === true; byId('native-devices').onchange = () => chrome.runtime.sendMessage({ type: 'native_config', enabled: byId('native-devices').checked });
+
+const virtualSettings = await chrome.storage.local.get('virtualDevicesEnabled'); byId('virtual-devices').checked = virtualSettings.virtualDevicesEnabled === true; byId('virtual-devices').onchange = () => chrome.runtime.sendMessage({ type: 'virtual_config', enabled: byId('virtual-devices').checked });

@@ -1,6 +1,6 @@
 {
   "name": "codex-browser-bridge",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Control Chromium and Firefox from Codex through a local MCP and extension bridge",
   "private": true,
   "engines": {
@@ -21,9 +21,21 @@
     "test:firefox": "node scripts/firefox-smoke.js",
     "lint:firefox": "web-ext lint --source-dir dist/firefox --ignore-files manifest.firefox.json",
     "test:isolated": "node scripts/isolated-browser-smoke.js",
-    "doctor": "node scripts/doctor.js"
+    "doctor": "node scripts/doctor.js",
+    "remote": "node server/remote.js",
+    "github:configure": "node scripts/github-setup.js"
   },
-  "keywords": [],
+  "keywords": [
+    "codex",
+    "mcp",
+    "browser-automation",
+    "firefox",
+    "brave",
+    "chromium",
+    "webextension",
+    "virtual-media",
+    "remote-browser"
+  ],
   "author": "",
   "license": "MIT",
   "type": "module",

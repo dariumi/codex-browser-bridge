@@ -12,7 +12,7 @@ export function normalizeLimits(payload) {
 export class AccountStatus {
   constructor(app, onUpdate = () => {}) {
     this.app = app; this.onUpdate = onUpdate;
-    this.value = { model: null, effort: null, plan: null, limits: [], fetchedAt: null, limitsError: null };
+    this.value = { model: null, effort: null, plan: null, models: [], profile: null, limits: [], fetchedAt: null, limitsError: null };
   }
   async read(force = false) {
     if (this.pending) return this.pending;
@@ -24,11 +24,16 @@ export class AccountStatus {
     const results = await Promise.allSettled([
       this.app.request('config/read', { includeLayers: false }, 10000),
       this.app.request('account/read', { refreshToken: false }, 10000),
-      this.app.request('account/rateLimits/read', {}, 10000)
+      this.app.request('account/rateLimits/read', {}, 10000),
+      this.app.request('model/list', { limit: 100 }, 10000)
     ]);
-    const [config, account, limits] = results;
+    const [config, account, limits, models] = results;
     this.value.model = config.status === 'fulfilled' ? config.value.config?.model || null : null;
     this.value.effort = config.status === 'fulfilled' ? config.value.config?.model_reasoning_effort || null : null;
+    this.value.models = models.status === 'fulfilled' ? (models.value.data || []).map(item => ({ model: item.model, name: item.displayName || item.model, efforts: (item.supportedReasoningEfforts || []).map(e => typeof e === 'string' ? e : e.reasoningEffort).filter(effort => typeof effort === 'string'), defaultEffort: item.defaultReasoningEffort })) : [];
+    // Display names only; email/account IDs and credentials are never exposed.
+    const profile = account.status === 'fulfilled' ? account.value.account : null;
+    this.value.profile = profile?.displayName || profile?.name ? { name: String(profile.displayName || profile.name).slice(0, 100) } : null;
     this.value.plan = account.status === 'fulfilled' ? account.value.account?.planType || null : null;
     this.value.limits = limits.status === 'fulfilled' ? normalizeLimits(limits.value) : [];
     this.value.limitsError = limits.status === 'rejected' ? 'Лимиты недоступны для текущего подключения Codex.' : null;

@@ -1,3 +1,4 @@
+import { t, language } from './i18n.js';
 import { api as chrome } from './platform.js';
 const $ = (id) => document.getElementById(id);
 let context = null, taskState = { tasks: [], activeTaskId: null }, selectedId = null, displayedTask = null;
@@ -14,21 +15,23 @@ function render() {
     context = { tabId: active.tabId, title: active.title, url: active.url };
     $('target-title').textContent = active.title || `Вкладка ${active.tabId}`; $('target-url').textContent = active.url;
   }
-  const task = active || taskState.tasks.find((item) => item.id === selectedId) || [...taskState.tasks].reverse().find((item) => item.tabId === context?.tabId);
+  const task = active || (selectedId === '__new__' ? null : taskState.tasks.find((item) => item.id === selectedId) || [...taskState.tasks].reverse().find((item) => item.tabId === context?.tabId));
   const running = !!active;
   if (active) { $('mode').value = active.mode || 'browser'; $('long-run').checked = active.longRun === true; $('long-settings').hidden = !active.longRun; }
   modeHint();
   $('send').textContent = running ? 'Отправить уточнение' : 'Передать задачу';
   $('long-run').disabled = running || $('mode').value !== 'browser' || !$('handoff').checked; $('max-hours').disabled = running;
   $('mode').disabled = running; $('handoff').disabled = running; $('use-tab').disabled = running;
+  $('model-select').disabled = running; $('effort-select').disabled = running;
+  $('history-retention').value = taskState.retention || 'session'; $('delete-task').disabled = !task || task.id === taskState.activeTaskId;
   displayedTask = task; renderAccount(taskState.account, task);
   $('welcome').hidden = !!task;
   $('progress').classList.toggle('running', running && !['waiting_permission', 'sleeping'].includes(active.status)); $('progress').dataset.status = task?.status || 'idle';
   $('progress').hidden = !task; $('stop').hidden = !running;
-  $('task-state').textContent = statuses[task?.status] || task?.status || '';
+  $('task-state').textContent = t(statuses[task?.status] || '') || task?.status || '';
   $('wake').hidden = active?.status !== 'sleeping';
   $('work-caption').textContent = active?.status === 'sleeping' ? 'ЗАПЛАНИРОВАННОЕ ОЖИДАНИЕ' : active?.status === 'waiting_permission' ? 'НУЖНО РАЗРЕШЕНИЕ' : running ? 'CODEX В ДЕЛЕ' : task?.status === 'completed' ? 'ГОТОВО' : 'ВЫПОЛНЕНИЕ ОСТАНОВЛЕНО';
-  $('activity').textContent = task?.error || (active?.status === 'sleeping' ? task.sleepReason : active?.status === 'waiting_permission' ? 'Выбери «Разрешить» или «Отказать» выше' : running ? activityLabel(task.activity) : task?.status === 'completed' ? 'Результат проверен · отчёт ниже' : 'Ход работы сохранён');
+  $('activity').textContent = task?.error || (active?.status === 'sleeping' ? task.sleepReason : active?.status === 'waiting_permission' ? 'Выбери «Разрешить» или «Отказать» выше' : running ? t(activityLabel(task.activity)) : task?.status === 'completed' ? 'Результат проверен · отчёт ниже' : 'Ход работы сохранён');
   const completed = (task?.plan || []).filter(step => step.status === 'completed').length;
   $('step-count').textContent = task?.plan?.length ? `${completed} из ${task.plan.length} этапов` : running ? task.status === 'starting' ? 'Готовится к запуску' : 'Выполняет задачу' : '';
   $('turn-count').textContent = task?.turns ? `${task.turns} / ${task.maxTurns || 20} ходов` : '';
@@ -39,27 +42,38 @@ function render() {
   $('messages').replaceChildren();
   for (const message of task?.messages || []) {
     const el = document.createElement('div'); el.className = 'message ' + message.role;
-    const role = document.createElement('span'); role.className = 'role'; role.textContent = message.role === 'user' ? 'Вы' : 'Codex';
+    const role = document.createElement('span'); role.className = 'role'; role.textContent = message.role === 'user' ? t('Вы') : 'Codex';
     el.append(role, document.createTextNode(message.text)); $('messages').append(el);
   }
   $('history-count').textContent = `(${taskState.tasks.length})`;
   $('history-list').replaceChildren();
   for (const previous of [...taskState.tasks].reverse().filter((item) => item.id !== task?.id)) {
-    const button = document.createElement('button'); button.textContent = `${statuses[previous.status] || previous.status} · ${previous.text.slice(0, 90)}`;
+    const button = document.createElement('button'); button.textContent = `${t(statuses[previous.status] || previous.status)} · ${previous.text.slice(0, 90)}`;
     button.onclick = () => { selectedId = previous.id; render(); }; $('history-list').append(button);
   }
 }
 $('composer').addEventListener('submit', async (event) => {
   event.preventDefault(); error(''); $('send').disabled = true;
   try {
-    const text = $('prompt').value.trim(); if (!text) return;
+    let text = $('prompt').value.trim(); if (!text) return;
+    if (text.startsWith('/')) {
+      const command = text.toLowerCase();
+      if (['/clear', '/new', '/stop', '/wake'].includes(command)) {
+        if (command === '/clear') await historyAction('clear_history');
+        else if (command === '/new') { if (taskState.activeTaskId) throw new Error(t('Сначала остановите текущую задачу.')); selectedId = '__new__'; render(); }
+        else { if (!taskState.activeTaskId) throw new Error(t('Нет активной задачи')); await send({ type: 'chat_control', action: command === '/stop' ? 'cancel' : 'wake', taskId: taskState.activeTaskId }); }
+        $('prompt').value = ''; return;
+      }
+      const prompts = { '/test': 'Пройди все этапы тестирования на этой странице и проверь результат.', '/summarize': 'Изучи страницу и кратко опиши её содержимое.', '/media': 'Используй browser_media для просмотра видео, аудио, субтитров и анимаций на странице. Сообщи, что удалось наблюдать.', '/screenshot': 'Сделай снимок текущей страницы и опиши видимое содержимое.' };
+      if (!prompts[command]) throw new Error(t('Неизвестная команда')); text = t(prompts[command]);
+    }
     if (taskState.activeTaskId) {
       const result = await send({ type: 'chat_control', action: 'steer', taskId: taskState.activeTaskId, text });
       if (result.policyUpdated) $('policy-feedback').textContent = `${result.domain}: ${result.mode === 'deny' ? 'доступ запрещён' : 'теперь требуется разрешение'}`;
     }
     else {
       if (!context) await target();
-      const task = await send({ type: 'chat_start', tabId: context.tabId, text, mode: $('mode').value, handoff: $('handoff').checked, longRun: $('long-run').checked, maxHours: Number($('max-hours').value) });
+      const task = await send({ type: 'chat_start', tabId: context.tabId, text, mode: $('mode').value, handoff: $('handoff').checked, longRun: $('long-run').checked, maxHours: Number($('max-hours').value), model: $('model-select').value || undefined, effort: $('effort-select').value || undefined, language });
       if (task.policyUpdated) $('policy-feedback').textContent = `${task.domain}: ${task.mode === 'deny' ? 'доступ запрещён' : 'теперь требуется разрешение'}`; else selectedId = task.id;
     }
     $('prompt').value = ''; taskState = await send({ type: 'chat_tasks' }); render();
@@ -84,7 +98,8 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'tasks_update') { taskState = message.data; render(); }
   if (message.type === 'chat_target' && !taskState.activeTaskId) target(message.tabId).then(render).catch((err) => error(err.message));
 });
-try { await target(); taskState = await send({ type: 'chat_tasks' }); render(); refreshAccount(); } catch (err) { error(err.message); render(); }
+const pageTarget = Number(new URL(location.href).searchParams.get('tabId'));
+try { await target(Number.isSafeInteger(pageTarget) && pageTarget > 0 ? pageTarget : undefined); taskState = await send({ type: 'chat_tasks' }); render(); refreshAccount(); } catch (err) { error(err.message); render(); }
 setInterval(updateElapsed, 1000);
 setInterval(refreshAccount, 60000);
 setInterval(async () => {
@@ -101,7 +116,7 @@ function updateElapsed() {
   const end = ['starting', 'running', 'cancelling', 'waiting_permission', 'sleeping', 'waking'].includes(task.status) ? Date.now() : Date.parse(task.updatedAt || task.createdAt);
   const seconds = Math.max(0, Math.floor((end - Date.parse(task.createdAt)) / 1000));
   $('sleep-until').hidden = task.status !== 'sleeping';
-  if (task.status === 'sleeping') { const remaining = Math.max(0, Math.ceil((Date.parse(task.wakeAt) - Date.now()) / 1000)); $('sleep-until').textContent = `Пробуждение ${new Date(task.wakeAt).toLocaleString('ru-RU')} · осталось ${Math.floor(remaining / 3600)} ч ${Math.floor(remaining % 3600 / 60)} мин ${remaining % 60} с${task.wakeError ? ' · ' + task.wakeError : ''}`; }
+  if (task.status === 'sleeping') { const remaining = Math.max(0, Math.ceil((Date.parse(task.wakeAt) - Date.now()) / 1000)); $('sleep-until').textContent = `Пробуждение ${new Date(task.wakeAt).toLocaleString(language)} · осталось ${Math.floor(remaining / 3600)} ч ${Math.floor(remaining % 3600 / 60)} мин ${remaining % 60} с${task.wakeError ? ' · ' + task.wakeError : ''}`; }
   $('elapsed').textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 function windowLabel(minutes, key) {
@@ -113,6 +128,20 @@ function windowLabel(minutes, key) {
 }
 function renderAccount(account, task) {
   const model = task?.model || account?.model;
+  $('profile-name').textContent = account?.profile?.name || t('Профиль недоступен');
+  if (account?.models?.length && JSON.stringify(account.models) !== $('model-select').dataset.catalog) {
+    const current = $('model-select').value; $('model-select').replaceChildren(new Option(t('По умолчанию'), ''), ...account.models.map(item => new Option(item.name, item.model)));
+    $('model-select').value = current; $('model-select').dataset.catalog = JSON.stringify(account.models); renderEfforts();
+  }
+  const usage = task?.tokenUsage;
+  const percent = usage?.limit > 0 && Number.isFinite(usage.used) ? 100 * usage.used / usage.limit : null;
+  $('context-meter').value = Math.min(100, percent || 0); $('context-meter').title = t('Расход по последнему запросу модели. Codex управляет сокращением контекста.');
+  $('context-note').textContent = task?.compactedAt ? `${t('Контекст сокращён')} ${new Date(task.compactedAt).toLocaleTimeString(language)}` : percent >= 90 ? t('Контекст близок к пределу; Codex может выполнить сокращение.') : '';
+  $('context-label').textContent = percent === null ? t('Контекст: нет данных') : `${t('Контекст')}: ${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()} (${percent.toFixed(1)}%)`;
+  const bucket = account?.limits?.find(item => item.model === model) || account?.limits?.find(item => item.id === 'codex') || account?.limits?.[0];
+  const five = bucket?.windows.find(item => item.durationMinutes === 300);
+  $('five-hour-meter').value = five?.remainingPercent || 0;
+  $('five-hour-label').textContent = five ? `${t('Лимит за 5 часов')}: ${five.remainingPercent}% ${t('осталось')}${five.resetsAt ? ` · ${t('Обновится')} ${new Date(five.resetsAt * 1000).toLocaleTimeString(language)}` : ''}` : t('Лимит за 5 часов: нет данных');
   $('model-label').textContent = task?.model ? 'МОДЕЛЬ ЗАДАЧИ' : 'МОДЕЛЬ В НАСТРОЙКАХ';
   $('model-name').textContent = model || 'Модель не указана';
   $('model-detail').textContent = [task?.effort || account?.effort ? `Рассуждение: ${task?.effort || account.effort}` : '', task?.modelReroutedFrom ? `Переключена с ${task.modelReroutedFrom}` : ''].filter(Boolean).join(' · ');
@@ -125,10 +154,10 @@ function renderAccount(account, task) {
     const remaining = document.createElement('strong'); remaining.textContent = `${window.remainingPercent}%`; const small = document.createElement('small'); small.textContent = 'осталось'; remaining.append(small);
     const track = document.createElement('div'); track.className = 'quota-track'; track.setAttribute('role', 'meter'); track.setAttribute('aria-label', label.textContent + ' — осталось'); track.setAttribute('aria-valuemin', '0'); track.setAttribute('aria-valuemax', '100'); track.setAttribute('aria-valuenow', window.remainingPercent);
     const fill = document.createElement('span'); fill.style.width = `${window.remainingPercent}%`; track.append(fill);
-    const reset = document.createElement('span'); reset.className = 'quota-reset'; reset.textContent = window.resetsAt ? `Обновится ${new Date(window.resetsAt * 1000).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Время обновления неизвестно';
+    const reset = document.createElement('span'); reset.className = 'quota-reset'; reset.textContent = window.resetsAt ? `Обновится ${new Date(window.resetsAt * 1000).toLocaleString(language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Время обновления неизвестно';
     card.append(label, remaining, track, reset); $('quota-windows').append(card);
   }
-  $('quota-status').textContent = account?.limitsError || (account?.limits?.length ? `Данные Codex · ${new Date(account.fetchedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` : account?.fetchedAt ? 'Лимиты не предоставлены аккаунтом' : 'Получаем лимиты аккаунта…');
+  $('quota-status').textContent = account?.limitsError || (account?.limits?.length ? `Данные Codex · ${new Date(account.fetchedAt).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}` : account?.fetchedAt ? 'Лимиты не предоставлены аккаунтом' : 'Получаем лимиты аккаунта…');
 }
 async function refreshAccount(force = false) {
   $('refresh-account').disabled = true;
@@ -148,3 +177,16 @@ function renderTemporary(status) {
     button.onclick = async () => { try { await send({ type: 'workspace_control', action: 'keep', tabId: tab.tabId }); row.remove(); } catch (err) { error(err.message); } }; row.append(button); box.append(row);
   }
 }
+
+function renderEfforts() { const model = taskState.account?.models?.find(item => item.model === ($('model-select').value || taskState.account.model)); const previous = $('effort-select').value; $('effort-select').replaceChildren(new Option(t('По умолчанию'), ''), ...(model?.efforts || []).map(value => new Option(value, value))); $('effort-select').value = model?.efforts.includes(previous) ? previous : ''; }
+$('model-select').addEventListener('change', renderEfforts);
+async function historyAction(action, extra = {}) { taskState = await send({ type: 'chat_history', action, ...extra }); if (!taskState.tasks.some(item => item.id === selectedId)) selectedId = null; render(); if (taskState.deletionErrors) error(t('История моста удалена, но часть сохранённых диалогов Codex удалить не удалось.')); }
+$('clear-history').onclick = () => historyAction('clear_history').catch(err => error(err.message));
+$('delete-task').onclick = () => historyAction('delete', { taskId: displayedTask?.id }).catch(err => error(err.message));
+$('history-retention').onchange = () => historyAction('history_settings', { retention: $('history-retention').value }).catch(err => error(err.message));
+for (const button of document.querySelectorAll('[data-command]')) button.onclick = () => { $('prompt').value = button.dataset.command; $('composer').requestSubmit(); };
+// Keep the conversation primary; settings live on the side at wider widths.
+const rail = $('control-rail'); const controls = document.createDocumentFragment();
+$('controls-toggle').onclick = () => { const open = document.body.classList.toggle('controls-open'); $('controls-toggle').setAttribute('aria-expanded', String(open)); };
+for (const selector of ['.account-card', '.model-controls', '.target', '.settings-row', '.handoff', '#long-settings', '#mode-hint']) for (const element of document.querySelectorAll(selector)) controls.append(element);
+rail.prepend(controls);
