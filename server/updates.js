@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { root as projectRoot, configPath } from './config.js';
+import { root as projectRoot, configPath, isSourceInstall } from './config.js';
 
 const officialRemote = 'https://github.com/dariumi/codex-browser-bridge.git';
 const ref = 'refs/remotes/bridge-update/main';
@@ -18,11 +18,13 @@ export function releaseMetadata(value) {
 }
 export class UpdateManager {
   constructor({ root = projectRoot, statePath = path.join(path.dirname(configPath), 'updates.json'), runner, idle = () => true, installed = () => ({}), restart = async () => {}, remote = officialRemote } = {}) {
+    this.packageManaged = root === projectRoot && !isSourceInstall;
     this.root = root; this.statePath = statePath; this.runner = runner || this.run.bind(this); this.idle = idle; this.installed = installed; this.restart = restart;
     this.remote = remote; this.policy = 'critical'; this.state = { source: officialRemote, status: 'unknown', available: false }; this.applying = false; this.ready = this.restore();
   }
   async restore() {
     this.currentVersion = JSON.parse(await readFile(path.join(this.root, 'package.json'), 'utf8')).version;
+    if (this.packageManaged) this.state = { source: 'package manager', status: 'package_managed', available: false, message: 'Update with npm or pipx/pip, rerun setup and reload the browser extension. Git self-updates are disabled for package installs.' };
     try { const saved = JSON.parse(await readFile(this.statePath, 'utf8')); if (['manual', 'critical', 'all'].includes(saved.policy)) this.policy = saved.policy; }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
@@ -51,6 +53,7 @@ export class UpdateManager {
     this.checking = this.checkOnce().finally(() => { this.checking = null; }); return this.checking;
   }
   async checkOnce() {
+    if (this.packageManaged) return this.status();
     try {
       const top = await this.runner('git', ['rev-parse', '--show-toplevel']);
       if (path.resolve(top) !== path.resolve(this.root)) throw new Error('Automatic updates require this project to be its own Git checkout. Reinstall using git clone.');

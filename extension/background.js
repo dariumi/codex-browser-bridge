@@ -1,3 +1,8 @@
+import { connectionIssue, retryAllowed } from './connection-health.js';
+import { Scripts } from './scripts.js';
+import { validateStep } from './script-actions.js';
+import { Integrations, integrationList } from './integrations.js';
+import { ViewProfiles } from './view.js';
 import { diagnosticURL } from './diagnostics-target.js';
 import { VirtualDevices } from './virtual-devices.js';
 import { DeviceBridge } from './native-devices.js';
@@ -11,7 +16,8 @@ import { extensionCommand } from './commands.js';
 
 const workspace = new BrowserWorkspace(chrome, { owner: () => tasksState.activeTaskId, target: () => tasksState.tasks.find(task => task.id === tasksState.activeTaskId)?.tabId });
 const automation = chrome.debugger ? new BrowserAutomation(chrome, workspace) : new FirefoxAutomation(chrome, workspace);
-let socket = null, heartbeat = null, retry = null, generation = 0, authBlocked = false;
+let socket = null, heartbeat = null, retry = null, handshake = null, generation = 0, authBlocked = false;
+let connectionStartedAt = 0, lastMessageAt = 0;
 let state = { connected: false, enabled: false, error: null, bridgeVersion: null };
 const uiPending = new Map();
 let tasksState = { tasks: [], activeTaskId: null, timeoutMinutes: 30 }, chatTabId = null;
@@ -28,7 +34,7 @@ function uiRequest(action, args = {}) {
 }
 const policy = new AccessPolicy(chrome, {
   scope: () => tasksState.activeTaskId || 'manual',
-  changed: data => { devices?.disconnect(); virtualDevices?.disconnect(); broadcast({ type: 'policy_update', data }); },
+  changed: data => { devices?.disconnect(); virtualDevices?.disconnect(); views?.clear(); broadcast({ type: 'policy_update', data }); },
   event: event => {
     if (socket?.readyState === WebSocket.OPEN && state.connected) socket.send(JSON.stringify({ type: 'permission_event', event }));
     if (event.type === 'pending') chrome.notifications.create(`access-${event.request.id}`, { type: 'basic', iconUrl: 'assets/avatar-128.png', title: 'Codex запрашивает разрешение', message: `${event.request.host} · ${event.request.kind === 'advanced' ? 'JavaScript / CDP' : event.request.reason}. Решение доступно в чате расширения.` }).catch(() => {});
@@ -37,9 +43,15 @@ const policy = new AccessPolicy(chrome, {
 const devices = new DeviceBridge(chrome, policy);
 const virtualDevices = new VirtualDevices(chrome, policy);
 const guard = new CommandGuard(chrome, automation, workspace, policy);
+const views = new ViewProfiles(chrome, automation, guard);
+const scripts = new Scripts(chrome, guard, browserCommand, validateStep, data => broadcast({ type: 'scripts_update', data }));
+const integrations = new Integrations(chrome, guard, policy);
 async function browserCommand(action, args, validate) {
+  if (action === 'view') return views.run(args, validate);
+  if (action === 'scripts') { if (['run', 'resume'].includes(args.action) && (!state.connected || !state.enabled)) throw new Error('Connect browser control before running scripts'); return scripts.run(args, validate); }
+  if (action === 'extensions') return integrations.run(args, validate);
   if (action === 'devices') { validate(); await policy.ready; const tab = await guard.target(args.tabId, 'devices'); const result = await (args.backend === 'native' ? devices : virtualDevices).run(args, tab); validate(); return result; }
-  if (action === 'workspace' && ['finish', 'release_all'].includes(args.action)) { devices.disconnect(); await virtualDevices.disconnect(); }
+  if (action === 'workspace' && ['finish', 'release_all'].includes(args.action)) { await scripts.run({ action: 'stop' }); await views.clear(); devices.disconnect(); await virtualDevices.disconnect(); }
   const result = await guard.run(action, args, validate);
   return action === 'extension_command' && result === null ? extensionCommand(chrome, args) : result;
 }
@@ -57,17 +69,21 @@ async function connect() {
   state.enabled = !!settings.enabled;
   if (!settings.enabled || socket || authBlocked) return;
   try { validate(settings); } catch (error) { state.error = error.message; badge('!', '#c23c3c'); return; }
-  const ws = new WebSocket(settings.url);
-  socket = ws;
+  let ws;
+  try { ws = new WebSocket(settings.url); } catch (error) { state.error = error.message; badge('!', '#c23c3c'); return; }
+  socket = ws; connectionStartedAt = Date.now(); lastMessageAt = connectionStartedAt;
+  handshake = setTimeout(checkConnection, 15000);
   ws.onopen = () => {
     if (epoch !== generation) { ws.close(); return; }
     ws.send(JSON.stringify({ type: 'hello', token: settings.token, version: chrome.runtime.getManifest().version, browser: capabilities(chrome).browser, capabilities: capabilities(chrome) }));
-    heartbeat = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' })); }, 20000);
+    heartbeat = setInterval(() => { checkConnection(); if (socket === ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' })); }, 20000);
   };
   ws.onmessage = async ({ data }) => {
+    if (socket !== ws || epoch !== generation) return;
+    lastMessageAt = Date.now();
     let message;
     try { message = JSON.parse(data); } catch { return; }
-    if (message.type === 'ready') { state.connected = true; state.bridgeVersion = message.version || null; uiRequest('list').then(data => { tasksState = data; broadcast({ type: 'tasks_update', data }); }).catch(() => {}); state.error = null; badge('ON', '#168457'); return; }
+    if (message.type === 'ready') { clearTimeout(handshake); handshake = null; state.connected = true; state.bridgeVersion = message.version || null; uiRequest('list').then(data => { tasksState = data; broadcast({ type: 'tasks_update', data }); }).catch(() => {}); state.error = null; badge('ON', '#168457'); return; }
     if (message.type === 'ui_result') {
       const pending = uiPending.get(message.id);
       if (pending) { clearTimeout(pending.timer); uiPending.delete(message.id); message.error ? pending.reject(new Error(message.error)) : pending.resolve(message.result); }
@@ -95,22 +111,37 @@ async function connect() {
   ws.onerror = () => { state.error = 'Local bridge is unreachable. Run npm run status on the Codex host.'; };
   ws.onclose = ({ code, reason }) => {
     if (socket !== ws) return;
-    clearInterval(heartbeat); heartbeat = null; socket = null; state.connected = false;
+    clearInterval(heartbeat); clearTimeout(handshake); heartbeat = null; handshake = null; socket = null; state.connected = false; state.bridgeVersion = null;
+    scripts.run({ action: 'stop' }).catch(() => {}); views.clear(); devices.disconnect(); virtualDevices.disconnect();
     for (const pending of uiPending.values()) { clearTimeout(pending.timer); pending.reject(new Error('Соединение с мостом потеряно.')); } uiPending.clear();
     if (reason) state.error = reason;
-    if (code === 1008) authBlocked = true;
+    authBlocked = !retryAllowed(code, reason);
     badge(state.enabled ? 'OFF' : '', '#8b6470');
     // Authentication failures require a corrected key rather than endless retries.
-    if (epoch === generation && code !== 1008) retry = setTimeout(connect, 3000);
+    if (epoch === generation && !authBlocked) retry = setTimeout(connect, code === 1008 ? 10000 : 3000);
   };
 }
 
+function checkConnection() {
+  const ws = socket;
+  if (!ws) { connect().catch(error => { state.error = error.message; }); return; }
+  const issue = connectionIssue({ readyState: ws.readyState, startedAt: connectionStartedAt, lastMessageAt, connected: state.connected });
+  if (!issue) return;
+  state.error = issue;
+  // Browser WebSockets have no terminate(). Release stale bookkeeping immediately;
+  // a delayed native close event cannot affect a newer socket (identity check).
+  const closed = ws.onclose;
+  try { ws.close(); } catch {}
+  closed?.({ code: 1006, reason: issue });
+}
+
 async function disconnect() {
-  generation++; authBlocked = false; clearTimeout(retry); clearInterval(heartbeat);
+  generation++; authBlocked = false; clearTimeout(retry); clearTimeout(handshake); clearInterval(heartbeat);
   const ws = socket; socket = null;
   if (ws) ws.close();
   for (const pending of uiPending.values()) { clearTimeout(pending.timer); pending.reject(new Error('Соединение отключено.')); } uiPending.clear();
   state.connected = false; state.bridgeVersion = null;
+  await scripts.run({ action: 'stop' }); await views.clear();
   devices.disconnect(); await virtualDevices.disconnect(); await automation.detachAll();
   await workspace.releaseAll(); await policy.reset();
   badge('', '#8b6470');
@@ -139,6 +170,12 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       if (!['release_all', 'collapse', 'merge', 'cleanup', 'keep'].includes(message.action)) throw new Error('Invalid workspace control');
       return browserCommand('workspace', { action: message.action, tabId: message.tabId });
     }
+    if (message.type === 'studio') {
+      if (message.section === 'scripts') { if (tasksState.activeTaskId && ['run', 'resume'].includes(message.args?.action)) throw new Error('Stop the managed task before starting a Studio script'); if (message.action === 'retention') return scripts.retention(message.enabled === true); return browserCommand('scripts', message.args, () => {}); }
+      if (message.section === 'view') return browserCommand('view', message.args, () => {});
+      if (message.section === 'integrations') { const items = integrationList(message.items); await chrome.storage.local.set({ extensionIntegrations: items }); return { saved: true }; }
+      throw new Error('Unknown studio section');
+    }
     if (message.type === 'diagnostics_open') {
       if (tasksState.activeTaskId) throw new Error('Сначала остановите текущую задачу.');
       return browserCommand('new_tab', { url: diagnosticURL(message.url), temporary: true, active: true }, () => {});
@@ -163,6 +200,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     }
     if (message.type === 'chat_tasks') { tasksState = await uiRequest('list'); return tasksState; }
     if (message.type === 'chat_start') {
+      if (scripts.job?.status === 'running') throw new Error('Stop the script before starting a task');
       const tab = await automation.tab(message.tabId || chatTabId);
       if (!/^https?:\/\//i.test(tab.url || '')) throw new Error('На служебной странице браузера выполнять задачи нельзя. Откройте нужный сайт HTTP(S), затем нажмите «Использовать открытую вкладку».');
       const rule = policyInstruction(message.text, tab.url);
@@ -188,6 +226,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     }
     if (message.type === 'virtual_config') { await chrome.storage.local.set({ virtualDevicesEnabled: message.enabled === true }); if (!message.enabled) await virtualDevices.disconnect(); return { ok: true }; }
     if (message.type === 'native_config') { await chrome.storage.local.set({ nativeDevicesEnabled: message.enabled === true }); if (!message.enabled) devices.disconnect(); return { ok: true }; }
+    if (message.type === 'reconnect') { await disconnect(); await connect(); return { ok: true }; }
     if (message.type === 'configure') {
       validate(message.settings);
       await chrome.storage.local.set({ url: message.settings.url, token: message.settings.token, enabled: true });
@@ -214,6 +253,7 @@ async function injectLaunchers() {
   }
 }
 chrome.tabs.onUpdated?.addListener((tabId, change, tab) => {
+  if (change.status === 'complete' && tab.url) views.navigated(tabId, tab.url).catch(() => {});
   if (change.status === 'complete' && /^https?:/.test(tab.url || '')) chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }).catch(() => {});
 });
 chrome.runtime.onInstalled.addListener(() => {
@@ -221,8 +261,9 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 chrome.runtime.onStartup.addListener(() => { chrome.alarms.create('reconnect', { periodInMinutes: 0.5 }); connect(); injectLaunchers().catch(() => {}); });
 injectLaunchers().catch(() => {});
-chrome.alarms.onAlarm.addListener(({ name }) => { if (name === 'reconnect' && !socket) connect(); if (name === 'access_expiry') policy.sync().catch(() => {}); });
-connect();
+chrome.alarms.onAlarm.addListener(({ name }) => { if (name === 'reconnect') checkConnection(); if (name === 'access_expiry') policy.sync().catch(() => {}); });
+chrome.alarms.create('reconnect', { periodInMinutes: 0.5 });
+connect().catch(error => { state.error = error.message; });
 
 chrome.webNavigation?.onCreatedNavigationTarget.addListener(({ sourceTabId, tabId }) => {
   if (policy.tabs.has(sourceTabId)) policy.track(tabId).then(() => workspace.register(tabId, true)).catch(() => {});

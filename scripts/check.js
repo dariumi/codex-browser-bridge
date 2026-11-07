@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 
-for (const dir of ['server', 'extension', 'scripts', 'test']) {
+for (const dir of ['bin', 'server', 'extension', 'scripts', 'test']) {
   for (const file of await readdir(new URL(`../${dir}/`, import.meta.url))) {
     if (!file.endsWith('.js')) continue;
     const result = spawnSync(process.execPath, ['--check', `${dir}/${file}`], { stdio: 'inherit' });
@@ -21,3 +21,8 @@ const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url
 const release = JSON.parse(await readFile(new URL('../update.json', import.meta.url)));
 if (pkg.version !== manifest.version || release.version !== pkg.version || typeof release.critical !== 'boolean') throw new Error('Package, browser manifests and update metadata must agree');
 console.log('Release versions: OK');
+
+const pythonProject = await readFile(new URL('../pyproject.toml', import.meta.url), 'utf8');
+if (!pythonProject.includes(`version = "${pkg.version}"`)) throw new Error('Python package version must match the release');
+const pythonVersion = await readFile(new URL('../python/src/codex_browser_bridge/__init__.py', import.meta.url), 'utf8');
+if (!pythonVersion.includes(`__version__ = "${pkg.version}"`)) throw new Error('Python runtime version must match package metadata');

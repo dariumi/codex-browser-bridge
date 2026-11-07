@@ -1,10 +1,14 @@
 import { mkdir, readFile, writeFile, chmod } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
-export const configPath = process.env.BROWSER_BRIDGE_CONFIG || path.join(root, '.local', 'connection.json');
+export const isSourceInstall = existsSync(path.join(root, '.git'));
+const userState = (process.env.BROWSER_BRIDGE_HOME && path.resolve(process.env.BROWSER_BRIDGE_HOME)) || (process.platform === 'win32' ? path.join(process.env.LOCALAPPDATA || homedir(), 'codex-browser-bridge') : process.platform === 'darwin' ? path.join(homedir(), 'Library', 'Application Support', 'codex-browser-bridge') : path.join(process.env.XDG_STATE_HOME || path.join(homedir(), '.local', 'state'), 'codex-browser-bridge'));
+export const configPath = (process.env.BROWSER_BRIDGE_CONFIG && path.resolve(process.env.BROWSER_BRIDGE_CONFIG)) || (isSourceInstall ? path.join(root, '.local', 'connection.json') : path.join(userState, 'connection.json'));
 
 export async function readConfig() {
   const config = JSON.parse(await readFile(configPath, 'utf8'));

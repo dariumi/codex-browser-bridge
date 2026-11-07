@@ -1,7 +1,53 @@
 const api = globalThis.browser || globalThis.chrome;
 const saved = await api.storage.local.get('language');
 export const language = saved.language === 'ru' || saved.language === 'en' ? saved.language : (navigator.language.toLowerCase().startsWith('ru') ? 'ru' : 'en');
-const pairs = `Версии моста и расширения совпадают|Bridge and extension versions match
+const pairs = `Переподключить|Reconnect
+Повторное подключение запущено.|Reconnection started.
+Обновления через менеджер пакетов|Updates managed by the package manager
+Студия автоматизации|Automation Studio
+Студия автоматизации ↗|Automation Studio ↗
+Студия|Studio
+Сценарии|Scripts
+Представление|View
+Расширения|Extensions
+Кнопка на странице|Page launcher
+Разделы|Sections
+Хранить сценарии на диске|Persist scripts on disk
+Сохранённые сценарии|Saved scripts
+Сценарий JSON|Script JSON
+Новый|New
+Удалить|Delete
+Запустить|Run
+Продолжить после разрешения|Resume after approval
+Экспорт JSON|Export JSON
+Импорт JSON|Import JSON
+Выберите сценарий|Select a script
+Импорт подготовлен. Нажмите «Сохранить».|Import ready. Press Save.
+Выберите рабочую вкладку|Choose a target tab
+Пресет|Preset
+Только масштаб|Zoom only
+Ширина|Width
+Высота|Height
+Масштаб, %|Zoom, %
+Тема|Theme
+Без изменения|Unchanged
+Оставьте пустым, чтобы не менять|Leave empty to keep unchanged
+Применить|Apply
+Сбросить представление|Reset view
+Представление сброшено|View reset
+Шаблоны сообщений JSON|Message templates JSON
+Сохранить интеграции|Save integrations
+Интеграции сохранены|Integrations saved
+Скрыть плавающую кнопку|Hide floating launcher
+Компактный вид|Compact mode
+Сбросить положение|Reset position
+Подключение и доступ к сайтам|Connection and site access
+Вернуть кнопку|Restore launcher
+JSON-последовательность действий на выбранной вкладке. Каждый шаг проверяет доступ к сайту. По умолчанию сценарии хранятся только до закрытия браузера.|A JSON sequence of actions on the selected tab. Each step checks site access. Scripts are session-only by default.
+Firefox: CSS-масштаб страницы и User-Agent. Нативный масштаб сайта не меняется. Полная эмуляция viewport, touch и темы доступна в Chromium. Смена User-Agent не меняет весь отпечаток устройства; для запросов нужна перезагрузка страницы.|Firefox supports document CSS zoom and User-Agent; native site zoom is unchanged. Full viewport, touch and theme emulation is available in Chromium. Changing User-Agent does not change the entire device fingerprint; reload for requests.
+Добавьте ID расширения, точное сообщение и разрешённые origin. Получатель должен поддерживать внешний API сообщений. Агент сможет вызвать только сохранённый шаблон. Не добавляйте шаблоны обхода ограничений, удалённого eval или проксирования произвольных команд.|Specify the extension ID, exact message and allowed origins. The recipient must support external messaging. The agent can invoke only saved templates. Do not add templates for bypassing restrictions, remote eval or arbitrary command proxying.
+Перетаскивайте кнопку за ручку ⠿. Положение сохраняется для этого браузера. Скрытую кнопку можно вернуть здесь или в popup расширения.|Drag the launcher by its ⠿ handle. Position is saved for this browser. Restore a hidden launcher here or in the extension popup.
+Версии моста и расширения совпадают|Bridge and extension versions match
 Закрыть чат|Close chat
 Закрыть|Close
 Диагностика|Diagnostics

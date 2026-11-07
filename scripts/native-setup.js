@@ -1,9 +1,9 @@
 import { mkdir, writeFile, chmod } from 'node:fs/promises';
 import path from 'node:path';
-import { root } from '../server/config.js';
+import { root, configPath } from '../server/config.js';
 const extensionId = process.argv[2];
 if (!/^[a-p]{32}$/.test(extensionId || '')) { console.error('Usage: node scripts/native-setup.js CHROMIUM_EXTENSION_ID'); process.exit(1); }
-const directory = path.join(root, '.local/native'); await mkdir(directory, { recursive: true, mode: 0o700 });
+const directory = path.join(path.dirname(configPath), 'native'); await mkdir(directory, { recursive: true, mode: 0o700 });
 const launcher = path.join(directory, 'codex-devices');
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
 await writeFile(launcher, `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(path.join(root, 'scripts/native-host.js'))}\n`, { mode: 0o700 }); await chmod(launcher, 0o700);

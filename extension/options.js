@@ -27,6 +27,7 @@ byId('settings').addEventListener('submit', async (event) => {
     report('Параметры сохранены. Подключаемся…');
   } catch (error) { report(error.message, true); }
 });
+byId('reconnect').onclick = async () => { try { const reply = await chrome.runtime.sendMessage({ type: 'reconnect' }); if (reply.error) throw new Error(reply.error); report('Повторное подключение запущено.'); } catch (error) { report(error.message, true); } };
 byId('pause').addEventListener('click', async () => { await chrome.runtime.sendMessage({ type: 'toggle', enabled: false }); report('Управление отключено.'); });
 setInterval(async () => {
   const state = await chrome.runtime.sendMessage({ type: 'status' });

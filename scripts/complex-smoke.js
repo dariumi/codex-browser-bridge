@@ -40,7 +40,25 @@ export async function complexSmoke(call, step) {
       const frame = await action('media', { action: 'frame', selector: '#lab-video' }); assert.ok(frame.data && frame.width > 0 && frame.mimeType === 'image/png');
     });
     results.push({ name: 'virtual media devices', status: 'NOT_RUN', reason: 'Requires explicit opt-in and user approval; never activate in the installed extension during tests.' });
-    return { results, page: { observedText: await text() } };
+    const observedText = await text();
+    await check('saved script executes guarded steps', async () => {
+      const id = 'isolated-complex-review';
+      try {
+        await action('scripts', { action: 'save', script: { id, name: 'Isolated complex review', origins: [fixture.url], steps: [{ action: 'snapshot', args: {} }, { action: 'wait', args: { delayMs: 50 } }] } });
+        await action('scripts', { action: 'run', id }); const deadline = Date.now() + 5000; let job;
+        do { job = (await action('scripts', { action: 'status' })).job; if (job.status !== 'running') break; await new Promise(resolve => setTimeout(resolve, 100)); } while (Date.now() < deadline);
+        assert.equal(job.status, 'completed'); assert.equal(job.index, 2);
+      } finally { await action('scripts', { action: 'stop' }); await action('scripts', { action: 'delete', id }); }
+    });
+    await check('view zoom and actual HTTP User-Agent', async () => {
+      const before = await action('view', { action: 'inspect' });
+      try {
+        await action('view', { action: 'set', zoom: 0.9, userAgent: 'Bridge-Isolated-Test/0.7', ...(capabilities?.cdp ? { width: 800, height: 600, colorScheme: 'dark' } : {}) });
+        await action('navigate', { url: fixture.url + '/agent' }); assert.ok((await text()).includes('Bridge-Isolated-Test/0.7'));
+      } finally { const reset = await action('view', { action: 'reset' }); assert.equal(reset.reset, true); }
+      const after = await action('view', { action: 'inspect' }); assert.equal(after.zoom, before.zoom);
+    });
+    return { results, page: { observedText } };
   } finally {
     if (tabId) await call('close_tab', { tabId }).catch(() => {});
     await fixture.close();

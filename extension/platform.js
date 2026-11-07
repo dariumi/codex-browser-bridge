@@ -5,6 +5,7 @@ export function capabilities(browserApi = api) {
   return { browser: debuggerAvailable ? 'chromium' : 'firefox', backend: debuggerAvailable ? 'cdp' : 'dom',
     trustedInput: debuggerAvailable, cdp: debuggerAvailable, fullPageScreenshot: debuggerAvailable,
     fileUpload: debuggerAvailable, dialogs: debuggerAvailable, console: debuggerAvailable, network: debuggerAvailable,
+    viewProfiles: true, savedScripts: true, externalMessageTemplates: true,
     tabGroups: !!(browserApi.tabs.group && browserApi.tabGroups), sidebar: !!(browserApi.sidePanel || browserApi.sidebarAction) };
 }
 // Call synchronously from the message handler to retain Firefox's user gesture.

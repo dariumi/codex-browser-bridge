@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { readFile, writeFile } from 'node:fs/promises';
-import { initConfig, configPath, root } from '../server/config.js';
+import { initConfig, configPath, root, isSourceInstall } from '../server/config.js';
 import { bridgeRequest } from '../server/client.js';
 
 const portIndex = process.argv.indexOf('--port');
@@ -27,10 +27,12 @@ if (!process.argv.includes('--no-codex')) {
   }
   await writeFile(codexConfig, contents.slice(0, start) + updated + contents.slice(end));
 }
-const status = await bridgeRequest('/status');
-console.log(`Extension directory: ${path.join(root, 'extension')}`);
+const exports = isSourceInstall ? { chromium: path.join(root, 'extension'), firefox: path.join(root, 'dist/firefox') } : await (await import('./export-extension.js')).exportExtensions();
+const status = process.argv.includes('--no-start') ? null : await bridgeRequest('/status');
+console.log(`Extension directory: ${exports.chromium}`);
 console.log(`Import this file in extension settings: ${configPath}`);
-console.log(`Bridge ready. Browser connected: ${status.connected}`);
+console.log(`Bridge ready. Browser connected: ${status?.connected ?? 'startup skipped'}`);
 console.log('Restart/reload Codex MCP to discover browser_* tools.');
-console.log('Then run npm run doctor. For Firefox, run npm run package and load dist/firefox/manifest.json.');
+console.log(`Firefox manifest: ${path.join(exports.firefox, 'manifest.json')}${isSourceInstall ? ' (run npm run package first)' : ''}`);
+console.log('Then run codex-browser-bridge doctor (or npm run doctor in a source checkout).');
 if (process.argv.includes('--delegate-browser')) console.log('Browser-tool delegation is enabled only for browser_bridge. Extension site restrictions and user consent still apply.');

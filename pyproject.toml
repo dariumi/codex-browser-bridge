@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-browser-bridge"
+version = "0.8.1"
+description = "Python launcher for the Codex Browser Bridge MCP and browser extension"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+classifiers = ["Programming Language :: Python :: 3", "Operating System :: OS Independent", "Topic :: Internet :: WWW/HTTP :: Browsers"]
+keywords = ["codex", "mcp", "browser", "automation", "firefox", "chromium"]
+
+[project.urls]
+Homepage = "https://github.com/dariumi/codex-browser-bridge"
+Documentation = "https://github.com/dariumi/codex-browser-bridge/blob/main/docs/PACKAGES.md"
+Issues = "https://github.com/dariumi/codex-browser-bridge/issues"
+
+[project.scripts]
+codex-browser-bridge = "codex_browser_bridge.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["python/src"]
+
+[tool.setuptools.package-data]
+codex_browser_bridge = ["_bundle/*.tgz", "_bundle/*.json"]

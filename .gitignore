@@ -6,3 +6,9 @@ dist/
 
 .playwright-cli/
 .playwright/
+
+build/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.venv/

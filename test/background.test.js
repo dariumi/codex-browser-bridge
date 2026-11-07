@@ -11,7 +11,7 @@ test('content scripts cannot submit tasks or read extension status; launcher onl
     tabs: { onRemoved: event('removed'), sendMessage: noop, get: async id => ({ id, url: 'about:debugging#/runtime/this-firefox' }) },
     debugger: { onDetach: event('detached'), onEvent: event('debuggerEvent'), getTargets: async () => [] },
     action: { setBadgeText: noop, setBadgeBackgroundColor: noop },
-    alarms: { onAlarm: event('alarm') }, notifications: { onClicked: event('notification') },
+    alarms: { create: noop, onAlarm: event('alarm') }, notifications: { onClicked: event('notification') },
     sidePanel: { open: async ({ tabId }) => { opened = tabId; } }
   };
   t.after(() => { delete globalThis.chrome; });

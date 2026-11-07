@@ -1,3 +1,4 @@
+import { stopHandler } from './lifecycle.js';
 import { readConfig } from './config.js';
 import { createBroker } from './broker.js';
 import { TaskManager } from './tasks.js';
@@ -28,6 +29,7 @@ try {
   await tasks.ready;
   updates = new UpdateManager({ idle: () => !tasks.active && !restarting, installed: () => broker?.status(false) || {}, restart }); await updates.ready;
   broker = await createBroker({ ...config, handlers: {
+    lifecycle: stopHandler({ accepted: () => { restarting = true; }, busy: () => !!tasks.active || updates.applying || restarting, stop: async () => { restarting = true; await tasks.stop({ preserveSleeping: true }); await broker.close(); process.exit(0); } }),
     updateStatus: () => updates.status(),
     permission: event => tasks.permissionEvent(event),
     task: (args) => tasks.handle(args.action, args),

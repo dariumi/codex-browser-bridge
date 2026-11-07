@@ -30,5 +30,5 @@ export async function bridgeRequest(endpoint, command, { autoStart = true } = {}
     await new Promise((resolve) => setTimeout(resolve, 100));
     try { return await request(); } catch (error) { if (error.cause?.code !== 'ECONNREFUSED') throw error; }
   }
-  throw new Error('Bridge failed to start. See .local/bridge.log');
+  throw new Error(`Bridge failed to start. See ${path.join(path.dirname(configPath), 'bridge.log')}`);
 }

@@ -5,7 +5,7 @@ let busy = false;
 async function send(action, policy) { const result = await api.runtime.sendMessage({ type: 'updates_control', action, policy }); if (result?.error) throw new Error(result.error); return result; }
 function render(state) {
   if (!$('updates-status')) return;
-  const labels = { validating: 'Проверяем новую версию в отдельной копии…', applying: 'Устанавливаем обновление…', applied: 'Обновление установлено. Мост перезапускается…', failed: 'Обновление не применено', error: 'Проверка обновлений недоступна' };
+  const labels = { package_managed: t('Обновления через менеджер пакетов'), validating: 'Проверяем новую версию в отдельной копии…', applying: 'Устанавливаем обновление…', applied: 'Обновление установлено. Мост перезапускается…', failed: 'Обновление не применено', error: 'Проверка обновлений недоступна' };
   $('updates-status').textContent = labels[state.status] || (state.available ? `${state.critical ? 'Критическое обновление' : 'Доступно обновление'}: ${state.currentVersion} → ${state.version}` : `${t('Установлена версия')} ${state.currentVersion}${state.checkedAt ? ' · проверено ' + new Date(state.checkedAt).toLocaleString(language) : ' · ещё не проверено'}`);
   if ($('updates-detail')) $('updates-detail').textContent = state.error || state.message || (state.extensionOutdated ? `${t('Расширение')} ${state.extensionVersion} ${t('отстаёт от моста. Перезагрузите его; для Firefox используйте новую сборку dist/firefox.')}` : state.available ? state.notes : `${t('Источник')}: github.com/dariumi/codex-browser-bridge`);
   if ($('updates-policy')) $('updates-policy').value = state.policy;

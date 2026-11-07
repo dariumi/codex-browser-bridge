@@ -21,3 +21,6 @@ textarea{display:block;min-height:48px;max-height:140px;padding:8px 9px;font-siz
 @media(max-width:350px){.chat{padding:8px}.usage-bars{gap:8px}.usage-bars label{font-size:8px}}
 
 #chat-close{margin-left:auto;font-size:16px;line-height:1;padding:7px 9px;align-self:center}
+
+/* 0.7: clearer conversation surfaces, quieter chrome. */
+.chat{background:radial-gradient(ellipse at 100% 0%,#5d429c19,transparent 55%),#10131d}.message.assistant{border-color:#ffffff0d;background:#ffffff04;border-radius:15px 15px 15px 4px}.message.user{background:#a88ae912;border-color:#ad93e52b;border-radius:15px 15px 4px 15px}.chat #composer{box-shadow:0 6px 24px #0003;border-color:#b6a0ff30}.profile-row{padding-bottom:7px;border-bottom:1px solid #ffffff09}.brand .connection{font-size:9px}.chat .model-controls select{cursor:pointer}#control-rail{box-shadow:0 16px 70px #0009}

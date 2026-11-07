@@ -164,3 +164,11 @@ Quick commands: `/new`, `/clear`, `/stop`, `/wake`, `/test`, `/summarize`, `/med
 If opening the sidebar is rejected by the browser, Chat opens in a separate extension tab and retains the original target page. The floating launcher is restored after DOM replacement and reinjected on navigation/reload. Browser internal pages and extension stores may prohibit content scripts; use the toolbar Chat button there.
 
 Version 0.6.1 keeps the composer at the bottom and model/effort controls compact. Type `/` for command suggestions (arrows, Enter/Tab to select, Escape to dismiss); selecting a suggestion does not execute it. Settings close with ✕, Escape or a click outside. Usage details are in tooltips and settings; unavailable meters are hidden.
+
+For 0.7 features open Studio from popup or chat settings. [Studio guide](STUDIO.md). Reload both extension and bridge to discover the three new MCP tools (38 total). Existing site rules and launcher preferences are retained; script disk retention remains opt-in.
+
+## npm and Python packages (0.8)
+
+[PACKAGES.md](PACKAGES.md) describes installing the CLI without Git, exported browser add-ons, state preservation and registry publication status. Source-only instructions above continue to apply to Git checkouts. Package installs use `codex-browser-bridge setup` and `codex-browser-bridge extension`; do not load addons directly from installed code or an ephemeral cache.
+
+If the bridge is running but the extension is disconnected, use **Reconnect** in extension settings. A stalled handshake or missing heartbeat is retried automatically; an occupied bridge is retried without changing the key. Invalid credentials remain blocked until corrected or an explicit user retry. MCP client availability and browser WebSocket availability are separate checks.

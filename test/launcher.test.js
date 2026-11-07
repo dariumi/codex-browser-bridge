@@ -22,15 +22,23 @@ test('launcher survives DOM removal and reinjection without duplicated listeners
     remove() { if (this.parentNode) { this.parentNode.children = this.parentNode.children.filter(x => x !== this); this.parentNode = null; } }
     attachShadow() { this.shadow = new Element(); return this.shadow; }
     addEventListener(name, fn) { this.listeners[name] = fn; }
+    getBoundingClientRect() { return { left: 20, top: 20, width: 180, height: 48 }; }
   }
   const root = new Element();
   const document = { documentElement: root, createElement: () => { const e = new Element(); hosts.push(e); return e; }, getElementById: id => root.children.find(x => x.id === id), addEventListener() {}, removeEventListener() {} };
-  const api = { storage: { local: { get: async () => ({ language: 'en' }) } }, runtime: { getURL: x => x, sendMessage: async request => request.type === 'open_chat' ? { error: 'Opening failed' } : {}, onMessage: { addListener: fn => listeners.add(fn), removeListener: fn => listeners.delete(fn) } } };
+  let stored = {}; const storageListeners = new Set();
+  const api = { storage: { onChanged: { addListener: fn => storageListeners.add(fn), removeListener: fn => storageListeners.delete(fn) }, local: { get: async () => ({ language: 'en', ...stored }), set: async value => { stored = { ...stored, ...value }; for (const listener of storageListeners) listener({ launcherSettings: { newValue: value.launcherSettings } }, 'local'); } } }, runtime: { getURL: x => x, sendMessage: async request => request.type === 'open_chat' ? { error: 'Opening failed' } : {}, onMessage: { addListener: fn => listeners.add(fn), removeListener: fn => listeners.delete(fn) } } };
   const context = vm.createContext({ document, chrome: api, navigator: { language: 'en' }, MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe() {} disconnect() { this.disconnected = true; } } });
   const script = await readFile(new URL('../extension/content.js', import.meta.url), 'utf8');
   vm.runInContext(script, context); let host = root.children[0]; assert.ok(host);
   host.remove(); observers[0].fn(); assert.equal(root.children[0], host);
   vm.runInContext(script, context); assert.equal(root.children.length, 1); assert.equal(listeners.size, 1); assert.equal(observers[0].disconnected, true);
-  host = root.children[0]; const button = host.shadow.children[1]; button.listeners.click();
+  host = root.children[0]; const [handle, hide] = host.shadow.children[2].children;
+  const pointer = { button: 0, pointerId: 1, clientX: 40, clientY: 40, preventDefault() {}, stopPropagation() {} };
+  handle.listeners.pointerdown(pointer); handle.listeners.pointermove({ ...pointer, clientX: 180, clientY: 120 }); handle.listeners.pointerup(pointer);
+  await new Promise(resolve => setTimeout(resolve, 0)); assert.equal(stored.launcherSettings.x, 160); assert.equal(stored.launcherSettings.y, 100);
+  hide.listeners.click(); await new Promise(resolve => setTimeout(resolve, 0)); assert.equal(host.style.display, 'none');
+  await api.storage.local.set({ launcherSettings: { ...stored.launcherSettings, hidden: false } }); assert.equal(host.style.display, 'flex'); assert.equal(storageListeners.size, 1);
+  const button = host.shadow.children[1]; button.listeners.click();
   await new Promise(resolve => setTimeout(resolve, 0)); assert.equal(button.title, 'Opening failed'); assert.equal(button.children[1].textContent, 'Error — retry');
 });

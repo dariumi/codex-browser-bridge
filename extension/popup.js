@@ -1,6 +1,7 @@
 import './i18n.js';
 import { api as chrome, openChat, openChatPage } from './platform.js';
 let enabled = false;
+document.getElementById('show-launcher').onclick = async () => { const data = await chrome.storage.local.get('launcherSettings'); await chrome.storage.local.set({ launcherSettings: { ...(data.launcherSettings || {}), hidden: false } }); };
 async function refresh() {
   const state = await chrome.runtime.sendMessage({ type: 'status' });
   enabled = state.enabled;

@@ -2,12 +2,13 @@ import { readdir, readFile, writeFile, mkdir, copyFile, rm, lstat } from 'node:f
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { root as projectRoot, configPath } from './config.js';
+import { root as projectRoot, configPath, isSourceInstall } from './config.js';
 
-const sourceDirs = ['extension', 'server', 'scripts', 'test', '.github', 'docs'];
-const sourceFiles = ['package.json', 'package-lock.json', 'update.json', 'AGENTS.md', 'README.md', 'README.ru.md', 'DISCLAIMER.md', 'TESTING.md', 'ASSETS.md', 'LICENSE', '.gitignore'];
+const sourceDirs = ['bin', 'python', 'extension', 'server', 'scripts', 'test', '.github', 'docs'];
+const sourceFiles = ['pyproject.toml', 'setup.py', 'MANIFEST.in', 'RELEASE_NOTES.md', 'package.json', 'package-lock.json', 'update.json', 'AGENTS.md', 'README.md', 'README.ru.md', 'DISCLAIMER.md', 'TESTING.md', 'ASSETS.md', 'LICENSE', '.gitignore'];
 export class DevelopmentManager {
   constructor({ root = projectRoot, checkpointDir = path.join(path.dirname(configPath), 'checkpoints'), runner, authorize = () => false, apply } = {}) {
+    this.packageManaged = root === projectRoot && !isSourceInstall;
     this.root = root; this.checkpointDir = checkpointDir; this.runner = runner || this.runProcess.bind(this);
     this.authorize = authorize; this.apply = apply; this.lastValidation = null; this.currentCheckpoint = null; this.pendingApply = false;
     this.ready = this.restore();
@@ -24,7 +25,7 @@ export class DevelopmentManager {
       const full = path.join(this.root, relative);
       let stat; try { stat = await lstat(full); } catch (error) { if (error.code === 'ENOENT') return; throw error; }
       if (stat.isSymbolicLink()) throw new Error('Source symlinks are not supported for development checkpoints');
-      if (stat.isDirectory()) { for (const name of (await readdir(full)).sort()) await visit(path.join(relative, name)); }
+      if (stat.isDirectory()) { for (const name of (await readdir(full)).sort()) if (name !== '__pycache__' && !name.endsWith('.egg-info') && !/\.py[co]$/.test(name)) await visit(path.join(relative, name)); }
       else if (stat.isFile()) result.push(relative);
     };
     for (const name of [...sourceDirs, ...sourceFiles]) await visit(name);
@@ -36,6 +37,7 @@ export class DevelopmentManager {
     return hash.digest('hex');
   }
   async checkpoint() {
+    if (this.packageManaged) throw new Error('Source development requires a separate Git checkout; installed packages are immutable');
     await this.ready;
     const id = randomUUID(), files = await this.files(), base = path.join(this.checkpointDir, id);
     for (const file of files) { const destination = path.join(base, file); await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 }); await copyFile(path.join(this.root, file), destination); }
@@ -63,7 +65,8 @@ export class DevelopmentManager {
   }
   async handle(action, options = {}) {
     await this.ready;
-    if (action === 'status') return { enabled: this.authorize(), checkpoint: this.currentCheckpoint, validated: this.lastValidation?.passed || false, pendingApply: this.pendingApply };
+    if (action === 'status') return { enabled: !this.packageManaged && this.authorize(), packageManaged: this.packageManaged, checkpoint: this.currentCheckpoint, validated: this.lastValidation?.passed || false, pendingApply: this.pendingApply };
+    if (this.packageManaged) throw new Error('Source development requires a separate Git checkout; installed packages are immutable');
     if (!this.authorize()) throw new Error('Development mode is not enabled. Select it when submitting a task in extension chat.');
     if (action === 'checkpoint') return this.checkpoint();
     if (action === 'validate') return this.validate();

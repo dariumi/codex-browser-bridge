@@ -8,6 +8,7 @@ export async function startFixture(port = 17864) {
   const server = http.createServer(async (req, res) => {
     if (![`127.0.0.1:${server.address().port}`, `localhost:${server.address().port}`].includes(req.headers.host)) { res.writeHead(403); res.end(); return; }
     if (await serveLab(req, res)) return;
+    if (req.url === '/agent') { const value = String(req.headers['user-agent'] || '').replace(/[&<>"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[char]); res.writeHead(200, { 'Content-Type':'text/html; charset=utf-8' }); res.end('<!doctype html><title>Observed User-Agent</title><p>' + value + '</p>'); return; }
     if (req.url === '/ping') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true}'); }
     else if (req.url === '/download') { res.writeHead(200, { 'Content-Type': 'text/plain', 'Content-Disposition': 'attachment; filename="sample.txt"' }); res.end('Browser Bridge download fixture'); }
     else { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(html); }
